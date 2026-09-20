@@ -81,6 +81,25 @@ function render(status: RecordingStatus): void {
     return;
   }
 
+  if (status.stage === 'saved-locally') {
+    statusArea.innerHTML = `
+      <div class="banner">
+        ${escapeHtml(status.reason)}<br>
+        Saved as <strong>${escapeHtml(status.filename)}</strong> in your Downloads folder.
+        Once the host is reachable, upload it there directly from Mova Flow's own Upload tab.
+      </div>
+      <div class="actions">
+        <button class="action secondary" id="openSettingsBtn">Check server settings</button>
+        <button class="action" id="newRecordingBtn2">New recording</button>
+      </div>
+    `;
+    document.getElementById('openSettingsBtn')?.addEventListener('click', () => {
+      (document.getElementById('settingsDetails') as HTMLDetailsElement).open = true;
+    });
+    document.getElementById('newRecordingBtn2')?.addEventListener('click', () => render({ stage: 'idle' }));
+    return;
+  }
+
   if (status.stage === 'error') {
     statusArea.innerHTML = `
       <div class="error-text">${escapeHtml(status.message)}</div>

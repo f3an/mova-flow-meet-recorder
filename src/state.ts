@@ -9,7 +9,11 @@ export type RecordingStatus =
   | { stage: 'recording'; tabTitle: string; startedAt: number }
   | { stage: 'processing'; message: string }
   | { stage: 'done'; result: string; detectedLanguage: string }
-  | { stage: 'error'; message: string };
+  | { stage: 'error'; message: string }
+  // The host was unreachable (not configured, discovery didn't find it,
+  // blocked by the browser/OS, actually offline...) but the recording itself
+  // is too valuable to just discard, so it went to Downloads instead.
+  | { stage: 'saved-locally'; filename: string; reason: string };
 
 export interface Settings {
   host: string;

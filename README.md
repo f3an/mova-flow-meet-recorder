@@ -9,6 +9,8 @@ A Chrome extension that records a Google Meet call — both sides of the convers
 3. Press **Stop & transcribe**. The recording is converted to 16kHz mono WAV (the format Mova Flow's `whisper-cli.exe` actually reads) and uploaded to your configured Mova Flow host, exactly like the desktop app's own client role does — shared secret, short-lived bearer token, the same `/api/auth` → `/api/transcribe` → `/api/status` flow.
 4. The transcript comes back in the popup — copy it or download it as `.txt`.
 
+**If the host can't be reached** — not configured, `mova-flow.local` didn't resolve, the browser or OS is blocking local-network access (see [Troubleshooting](#troubleshooting)), or it's just offline — the recording is never discarded. It's saved to your Downloads folder as a `.wav` instead, and the popup tells you so; upload it manually from Mova Flow's own Upload tab once the host is reachable again.
+
 The in-toolbar button (`src/content.ts`) targets an attribute Google's own code assigns Meet's control-bar region, since the toolbar's CSS classes are obfuscated and get reshuffled across Meet redesigns. If a redesign ever breaks it, the button just won't appear — the popup keeps working regardless, since it doesn't depend on Meet's DOM at all.
 
 This is a companion to the [Mova Flow](https://github.com/f3an/Mova-Flow) desktop app — you need a Mova Flow host already running somewhere on your network (see that repo for setup). This extension doesn't do any recognition itself; it's just a recorder + client.
@@ -30,6 +32,15 @@ Then in Chrome: `chrome://extensions` → enable **Developer mode** → **Load u
 2. Try **⟲ Find host on network** first — every Mova Flow host also advertises itself as `mova-flow.local` (see the desktop app's mDNS discovery), so this often finds it with no typing at all. If it doesn't (unsigned local hostname resolution isn't 100% reliable on every OS, and this only works with exactly one host on the network), enter the host's IP and port manually — find these on the host's own Server tab.
 3. Enter the access secret key, **Test connection**, then **Save**. Saving will ask Chrome for permission to reach that address.
 4. On the first recording, Chrome will also ask for microphone permission — that's for your side of the conversation, not the meeting itself (the meeting's own audio comes from the tab, not the mic).
+
+## Troubleshooting
+
+**"Server not responding" / connection fails, even though the host is running:**
+
+- **macOS: grant the browser Local Network access.** System Settings → Privacy & Security → **Local Network** → enable it for your browser (Chrome, Brave, etc.). This is a macOS-level permission, separate from anything in the extension or Chrome's own settings — Safari is exempt from it as an Apple app, which is why the same address can work in Safari and fail in every Chromium browser until this is granted.
+- **Brave specifically may also gate this itself.** If macOS permission is already granted and it still fails, check `brave://flags` for a "Local Network Access" flag, or try a plain (non-Tor) Private Window to rule out a VPN/Tor routing all traffic away from the LAN.
+- **Confirm you're on the same network as the host** — different Wi-Fi, a VPN, or a guest network with client isolation all make a LAN address unreachable regardless of any of the above.
+- Whatever the cause, your recording is never lost while troubleshooting this — see the fallback below.
 
 ## Why tab + mic, not just the tab
 

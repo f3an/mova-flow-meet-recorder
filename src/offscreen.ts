@@ -62,6 +62,16 @@ async function startRecording(streamId: string): Promise<void> {
   recorder.start(1000);
 }
 
+/** Downloads.download() needs the "downloads" permission (already in
+ * manifest.json) but nothing extra beyond that — silent (no saveAs dialog)
+ * since this fires as an automatic fallback, not a user-initiated action. */
+async function saveLocally(blob: Blob, ext: string, reason: string): Promise<void> {
+  const filename = `mova-flow-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
+  const url = URL.createObjectURL(blob);
+  await chrome.downloads.download({ url, filename, saveAs: false });
+  await setStatus({ stage: 'saved-locally', filename, reason });
+}
+
 async function stopRecordingAndTranscribe(): Promise<void> {
   if (!recorder) return;
   const finished = new Promise<void>((resolve) => {
@@ -79,18 +89,32 @@ async function stopRecordingAndTranscribe(): Promise<void> {
   chunks = [];
   recorder = null;
 
-  try {
-    await setStatus({ stage: 'processing', message: 'Converting recording...' });
-    const wav = await recordingToWav(webm);
+  await setStatus({ stage: 'processing', message: 'Converting recording...' });
 
+  let wav: Blob;
+  try {
+    wav = await recordingToWav(webm);
+  } catch {
+    // Conversion itself failed (rare) — still don't lose an entire meeting
+    // over it. The raw recording won't upload straight to Mova Flow (webm
+    // isn't a format whisper-cli reads) but it's still audio the user has.
+    await saveLocally(webm, 'webm', "Couldn't process the recording, so the raw audio was saved instead.");
+    window.close();
+    return;
+  }
+
+  try {
     const settings = await getSettings();
     const result = await transcribe(settings, wav, 'auto', (message) => {
       void setStatus({ stage: 'processing', message });
     });
-
     await setStatus({ stage: 'done', result: result.text, detectedLanguage: result.detectedLanguage });
   } catch (err) {
-    await setStatus({ stage: 'error', message: (err as Error).message || 'Transcription failed' });
+    // Host not configured, discovery didn't find it, blocked by the
+    // browser/OS (see README's troubleshooting notes), or genuinely
+    // offline — whatever the reason, an hour of meeting audio is too
+    // valuable to just discard on a network error.
+    await saveLocally(wav, 'wav', `Couldn't reach the Mova Flow host (${(err as Error).message || 'connection failed'}).`);
   } finally {
     // Nothing keeps this document alive once the job is done — the next
     // recording creates a fresh one, per Chrome's own guidance on offscreen

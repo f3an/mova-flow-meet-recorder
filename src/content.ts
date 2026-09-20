@@ -30,7 +30,9 @@ function render(status: RecordingStatus | undefined): void {
       ? 'Mova Flow — stop & transcribe'
       : stage === 'processing'
         ? 'Mova Flow — transcribing…'
-        : 'Mova Flow — record this call';
+        : stage === 'saved-locally'
+          ? "Mova Flow — host unreachable, last recording saved to Downloads. Click to record again."
+          : 'Mova Flow — record this call';
 }
 
 async function onClick(): Promise<void> {
