@@ -21,6 +21,13 @@
   "background": {
     "service_worker": "dist/background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["dist/content.js"],
+      "css": ["content.css"]
+    }
+  ],
   "permissions": ["tabCapture", "offscreen", "storage", "activeTab", "downloads"],
   "optional_host_permissions": ["http://*/*", "https://*/*"]
 }

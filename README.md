@@ -4,10 +4,12 @@ A Chrome extension that records a Google Meet call — both sides of the convers
 
 ## How it works
 
-1. Click the extension icon on a Google Meet tab, press **Record**.
+1. On a Google Meet call, press **Record** — either the button this extension adds right into Meet's own call-controls toolbar (next to mic/camera), or the same button in the extension's popup.
 2. It captures the tab's audio (everyone else on the call) *and* your microphone, mixed into one track — so the transcript covers the whole conversation, not just one side.
 3. Press **Stop & transcribe**. The recording is converted to 16kHz mono WAV (the format Mova Flow's `whisper-cli.exe` actually reads) and uploaded to your configured Mova Flow host, exactly like the desktop app's own client role does — shared secret, short-lived bearer token, the same `/api/auth` → `/api/transcribe` → `/api/status` flow.
 4. The transcript comes back in the popup — copy it or download it as `.txt`.
+
+The in-toolbar button (`src/content.ts`) targets an attribute Google's own code assigns Meet's control-bar region, since the toolbar's CSS classes are obfuscated and get reshuffled across Meet redesigns. If a redesign ever breaks it, the button just won't appear — the popup keeps working regardless, since it doesn't depend on Meet's DOM at all.
 
 This is a companion to the [Mova Flow](https://github.com/f3an/Mova-Flow) desktop app — you need a Mova Flow host already running somewhere on your network (see that repo for setup). This extension doesn't do any recognition itself; it's just a recorder + client.
 
@@ -44,6 +46,7 @@ npm run watch      # rebuild on change
 - `src/background.ts` — the service worker; finds the active tab, requests `tabCapture` permission, creates the offscreen document.
 - `src/offscreen.ts` — the only place with a real DOM in Manifest V3, so the only place that can run a `MediaRecorder`/`AudioContext`. Does the actual capture, mixing, WAV conversion, and upload.
 - `src/popup.ts` — the UI: record/stop, live status (via `chrome.storage.session`, so it survives the popup closing mid-meeting), settings, and the finished transcript.
+- `src/content.ts` — injects the record button into Meet's own toolbar; reads/writes the same `chrome.storage.session` status the popup uses, so both stay in sync.
 - `src/api.ts` / `src/wav.ts` — ported from the Mova Flow desktop app's own `renderer.ts`, so the upload protocol and the WAV encoder stay identical to what the host already expects.
 
 ## Status

@@ -4,6 +4,11 @@
 // capture it, and hand that off.
 import { setStatus } from './state';
 
+// chrome.storage.session defaults to extension-pages-only access — the
+// content script injected into Meet needs to read/write it too, to know
+// whether to render its button as idle/recording/processing.
+void chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
+
 const OFFSCREEN_URL = 'offscreen.html';
 
 interface PopupMessage {
