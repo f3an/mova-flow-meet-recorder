@@ -25,8 +25,8 @@ Then in Chrome: `chrome://extensions` → enable **Developer mode** → **Load u
 ## Setup
 
 1. Click the extension icon → **Server settings**.
-2. Enter your Mova Flow host's IP and port (find these on the host's own Server tab), and the access secret key.
-3. **Test connection**, then **Save**. The first save will ask Chrome for permission to reach that address.
+2. Try **⟲ Find host on network** first — every Mova Flow host also advertises itself as `mova-flow.local` (see the desktop app's mDNS discovery), so this often finds it with no typing at all. If it doesn't (unsigned local hostname resolution isn't 100% reliable on every OS, and this only works with exactly one host on the network), enter the host's IP and port manually — find these on the host's own Server tab.
+3. Enter the access secret key, **Test connection**, then **Save**. Saving will ask Chrome for permission to reach that address.
 4. On the first recording, Chrome will also ask for microphone permission — that's for your side of the conversation, not the meeting itself (the meeting's own audio comes from the tab, not the mic).
 
 ## Why tab + mic, not just the tab

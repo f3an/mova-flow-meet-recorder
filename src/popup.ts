@@ -113,6 +113,36 @@ const portInput = document.getElementById('portInput') as HTMLInputElement;
 const secretInput = document.getElementById('secretInput') as HTMLInputElement;
 const settingsResult = document.getElementById('settingsResult') as HTMLDivElement;
 
+// mova-flow.local is a fixed alias every Mova Flow host also advertises
+// alongside its own machine name (see discovery.ts in the main repo) — an
+// extension has no mDNS API to actually browse the network with, so this is
+// the closest thing to "auto-discovery" it can do: try the one well-known
+// name directly and see if the OS resolves it. Only unambiguous with a
+// single host on the LAN; a second one gets suffixed by mDNS and this won't
+// find it.
+document.getElementById('findHostBtn')?.addEventListener('click', async () => {
+  const host = 'mova-flow.local';
+  const port = Number(portInput.value) || 5000;
+
+  settingsResult.textContent = 'Looking for mova-flow.local...';
+  const granted = await chrome.permissions.request({ origins: [`http://${host}:${port}/*`] });
+  if (!granted) {
+    settingsResult.textContent = 'Permission to reach that host was denied.';
+    return;
+  }
+
+  try {
+    const res = await fetch(`http://${host}:${port}/`, { signal: AbortSignal.timeout(2500) });
+    if (!res.ok) throw new Error();
+    hostInput.value = host;
+    portInput.value = String(port);
+    settingsResult.textContent = 'Found it — enter the secret key and Save.';
+  } catch {
+    settingsResult.textContent =
+      "Couldn't reach mova-flow.local. Make sure \"Expose to local network\" is on for the host, or enter its IP manually below.";
+  }
+});
+
 document.getElementById('saveSettingsBtn')?.addEventListener('click', async () => {
   const host = hostInput.value.trim() || '127.0.0.1';
   const port = Number(portInput.value) || 5000;
