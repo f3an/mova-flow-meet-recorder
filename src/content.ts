@@ -7,6 +7,7 @@
 // control-bar region instead, which has held up better across redesigns,
 // but nothing here is guaranteed stable.
 import type { RecordingStatus } from './state';
+import { getMicGranted } from './state';
 
 const BUTTON_ID = 'mova-flow-record-btn';
 
@@ -39,6 +40,23 @@ async function onClick(): Promise<void> {
   const btn = document.getElementById(BUTTON_ID) as HTMLButtonElement;
   const { movaFlowStatus } = await chrome.storage.session.get('movaFlowStatus');
   const stage = (movaFlowStatus as RecordingStatus | undefined)?.stage ?? 'idle';
+
+  // Something already went wrong (mic denied, host unreachable, conversion
+  // failed...) — open the popup to show why and let its own controls (Try
+  // again / Add host / New recording) handle it, rather than silently
+  // retrying the same thing that just failed.
+  if (stage === 'error' || stage === 'saved-locally') {
+    await chrome.runtime.sendMessage({ type: 'open-popup' });
+    return;
+  }
+
+  // Starting fresh but the mic grant this needs was never obtained — same
+  // deal: the popup has the "Allow microphone access" banner this button
+  // itself has no visible surface to show.
+  if (stage === 'idle' && !(await getMicGranted())) {
+    await chrome.runtime.sendMessage({ type: 'open-popup' });
+    return;
+  }
 
   btn.disabled = true;
   try {

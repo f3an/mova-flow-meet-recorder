@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Mova Flow Meet Recorder — Setup</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="onboarding.css">
+</head>
+
+<body>
+  <header class="topbar">
+    <img src="icons/32x32.png" width="18" height="18" alt="">
+    <span>MOVA FLOW — SETUP</span>
+  </header>
+
+  <main id="app">
+    <section class="hero">
+      <h1>Meeting notes, without the cloud</h1>
+      <p>
+        Mova Flow records your Google Meet calls and transcribes them on your own
+        Mova Flow host — nothing is ever sent anywhere else. Three quick things
+        to set up, then you're recording.
+      </p>
+    </section>
+
+    <div class="steps-container">
+      <section class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h2>Look for the button in Meet</h2>
+          <p>Once this is set up, a record button appears right in Meet's own call controls — no need to find the
+            extension icon mid-call.</p>
+          <div class="meet-demo">
+            <div class="meet-demo-bar">
+              <div class="meet-btn danger"><span class="dot"></span></div>
+              <div class="meet-btn"></div>
+              <div class="meet-btn"></div>
+              <div class="meet-btn end"></div>
+              <div class="meet-btn record">
+                <span class="record-dot"></span>
+              </div>
+            </div>
+            <div class="meet-demo-caption">The green button on the right is Mova Flow.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h2>Connect to your Mova Flow host</h2>
+          <p>The same host your desktop app uses — find it automatically if it's on this network, or enter it by hand.
+          </p>
+          <div class="actions" style="margin-top: 0;">
+            <button class="action secondary" id="findHostBtn">⟲ Find host on network</button>
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="hostInput">Host</label>
+              <input type="text" id="hostInput" placeholder="127.0.0.1">
+            </div>
+            <div style="flex: 0 0 80px;">
+              <label for="portInput">Port</label>
+              <input type="number" id="portInput" placeholder="5000">
+            </div>
+          </div>
+          <label for="secretInput">Secret key</label>
+          <input type="password" id="secretInput" placeholder="secret key">
+          <div class="actions">
+            <button class="action" id="saveSettingsBtn">Save</button>
+            <button class="action secondary" id="testConnectionBtn">Test connection</button>
+          </div>
+          <div class="hint" id="settingsResult"></div>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h2>Allow microphone access</h2>
+          <p>
+            Meet never plays your own voice back through the tab — only the other
+            participants'. Without this, transcripts would be missing everything
+            <em>you</em> said. Chrome can only ask for this on a visible page like
+            this one, not from the hidden recorder that runs during a call.
+          </p>
+          <div id="statusArea">
+            <div class="record-row">
+              <button class="action" id="grantBtn">Allow microphone access</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="done" id="doneSection" hidden>
+      <div class="banner">You're all set. Close this tab and start a Meet call.</div>
+    </section>
+  </main>
+
+  <script src="dist/onboarding.js"></script>
+</body>
+
+</html>

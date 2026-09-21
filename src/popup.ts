@@ -1,5 +1,6 @@
 import { checkConnection } from './api';
-import { getSettings, getStatus, setSettings, RecordingStatus } from './state';
+import { getSettings, getStatus, setMicGranted, RecordingStatus } from './state';
+import { initSettingsPanel } from './settingsPanel';
 
 const statusArea = document.getElementById('statusArea') as HTMLDivElement;
 
@@ -18,6 +19,68 @@ function formatElapsed(startedAt: number): string {
 
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
 
+// The offscreen document that does the actual recording has no visible
+// surface, so it can never show the microphone permission prompt itself —
+// this banner is the fallback for anyone who skipped/dismissed the
+// onboarding tab that normally handles it right after install.
+async function renderMicBannerIfNeeded(): Promise<void> {
+  const micBanner = document.getElementById('micBanner');
+  if (!micBanner) return;
+  try {
+    const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+    if (status.state === 'granted') return;
+  } catch {
+    // permissions.query for 'microphone' isn't supported everywhere — fall
+    // through and show the banner, the button below still works either way.
+  }
+  micBanner.innerHTML = `
+    <div class="banner" style="margin-top: 8px;">
+      Microphone access isn't enabled yet — recordings will miss your own voice.
+      <div class="record-row" style="margin-top: 8px;">
+        <button class="action secondary" id="grantMicBtn">Allow microphone access</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('grantMicBtn')?.addEventListener('click', async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      for (const track of stream.getTracks()) track.stop();
+      void setMicGranted(true);
+      micBanner.innerHTML = '';
+    } catch {
+      /* still denied — leave the banner up so they can retry */
+    }
+  });
+}
+
+// Checked on every popup open so a recording never gets to the "can't reach
+// the host" surprise only after the call is already over — this is the same
+// check the settings panel's own "Test connection" button runs.
+async function renderHostBannerIfNeeded(): Promise<void> {
+  const hostBanner = document.getElementById('hostBanner');
+  if (!hostBanner) return;
+  const settings = await getSettings();
+  const { reachable, authOk } = await checkConnection(settings);
+  if (reachable && authOk) {
+    hostBanner.innerHTML = '';
+    return;
+  }
+  const message = !reachable
+    ? `Can't reach the Mova Flow host at ${settings.host}:${settings.port}.`
+    : 'Host found, but the secret key is wrong.';
+  hostBanner.innerHTML = `
+    <div class="banner" style="margin-top: 8px;">
+      ${escapeHtml(message)} Recordings will be saved to Downloads until this is fixed.
+      <div class="record-row" style="margin-top: 8px;">
+        <button class="action secondary" id="addHostBtn">Add host</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('addHostBtn')?.addEventListener('click', () => {
+    (document.getElementById('settingsDetails') as HTMLDetailsElement).open = true;
+  });
+}
+
 function render(status: RecordingStatus): void {
   if (elapsedTimer) {
     clearInterval(elapsedTimer);
@@ -27,11 +90,15 @@ function render(status: RecordingStatus): void {
   if (status.stage === 'idle') {
     statusArea.innerHTML = `
       <div class="banner">Open a Google Meet call, then press Record.</div>
+      <div id="micBanner"></div>
+      <div id="hostBanner"></div>
       <div class="record-row" style="margin-top: 12px;">
         <button class="action" id="recordBtn">● Record meeting</button>
       </div>
     `;
     document.getElementById('recordBtn')?.addEventListener('click', startRecording);
+    void renderMicBannerIfNeeded();
+    void renderHostBannerIfNeeded();
     return;
   }
 
@@ -126,75 +193,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// ── Settings ─────────────────────────────────────────────────────────────
-const hostInput = document.getElementById('hostInput') as HTMLInputElement;
-const portInput = document.getElementById('portInput') as HTMLInputElement;
-const secretInput = document.getElementById('secretInput') as HTMLInputElement;
-const settingsResult = document.getElementById('settingsResult') as HTMLDivElement;
-
-// mova-flow.local is a fixed alias every Mova Flow host also advertises
-// alongside its own machine name (see discovery.ts in the main repo) — an
-// extension has no mDNS API to actually browse the network with, so this is
-// the closest thing to "auto-discovery" it can do: try the one well-known
-// name directly and see if the OS resolves it. Only unambiguous with a
-// single host on the LAN; a second one gets suffixed by mDNS and this won't
-// find it.
-document.getElementById('findHostBtn')?.addEventListener('click', async () => {
-  const host = 'mova-flow.local';
-  const port = Number(portInput.value) || 5000;
-
-  settingsResult.textContent = 'Looking for mova-flow.local...';
-  const granted = await chrome.permissions.request({ origins: [`http://${host}:${port}/*`] });
-  if (!granted) {
-    settingsResult.textContent = 'Permission to reach that host was denied.';
-    return;
-  }
-
-  try {
-    const res = await fetch(`http://${host}:${port}/`, { signal: AbortSignal.timeout(2500) });
-    if (!res.ok) throw new Error();
-    hostInput.value = host;
-    portInput.value = String(port);
-    settingsResult.textContent = 'Found it — enter the secret key and Save.';
-  } catch {
-    settingsResult.textContent =
-      "Couldn't reach mova-flow.local. Make sure \"Expose to local network\" is on for the host, or enter its IP manually below.";
-  }
-});
-
-document.getElementById('saveSettingsBtn')?.addEventListener('click', async () => {
-  const host = hostInput.value.trim() || '127.0.0.1';
-  const port = Number(portInput.value) || 5000;
-  const secret = secretInput.value.trim();
-
-  const granted = await chrome.permissions.request({ origins: [`http://${host}:${port}/*`] });
-  if (!granted) {
-    settingsResult.textContent = 'Permission to reach that host was denied.';
-    return;
-  }
-  await setSettings({ host, port, secret });
-  settingsResult.textContent = 'Saved.';
-});
-
-document.getElementById('testConnectionBtn')?.addEventListener('click', async () => {
-  settingsResult.textContent = 'Checking...';
-  const host = hostInput.value.trim() || '127.0.0.1';
-  const port = Number(portInput.value) || 5000;
-  const secret = secretInput.value.trim();
-  const res = await checkConnection({ host, port, secret });
-  settingsResult.textContent = !res.reachable
-    ? 'Server not responding.'
-    : !res.authOk
-      ? 'Connection OK, but the secret key is wrong.'
-      : 'Connection successful, authorization passed.';
-});
-
 async function init(): Promise<void> {
-  const settings = await getSettings();
-  hostInput.value = settings.host;
-  portInput.value = String(settings.port);
-  secretInput.value = settings.secret;
-
+  await initSettingsPanel();
   render(await getStatus());
 }
 

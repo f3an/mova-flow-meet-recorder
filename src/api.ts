@@ -50,6 +50,7 @@ export async function transcribe(
   settings: Settings,
   wav: Blob,
   language: string,
+  filename: string,
   onProgress: ProgressCb,
 ): Promise<TranscribeResult> {
   const base = baseUrl(settings);
@@ -57,7 +58,7 @@ export async function transcribe(
 
   onProgress('Uploading recording...');
   const form = new FormData();
-  form.append('file', wav, 'meet-recording.wav');
+  form.append('file', wav, filename);
   form.append('language', language);
 
   const uploadRes = await fetch(`${base}/api/transcribe`, {

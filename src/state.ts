@@ -6,7 +6,7 @@
 
 export type RecordingStatus =
   | { stage: 'idle' }
-  | { stage: 'recording'; tabTitle: string; startedAt: number }
+  | { stage: 'recording'; tabTitle: string; startedAt: number; recordingName: string }
   | { stage: 'processing'; message: string }
   | { stage: 'done'; result: string; detectedLanguage: string }
   | { stage: 'error'; message: string }
@@ -30,7 +30,14 @@ export async function getStatus(): Promise<RecordingStatus> {
 }
 
 export async function setStatus(status: RecordingStatus): Promise<void> {
-  await chrome.storage.session.set({ [STATUS_KEY]: status });
+  try {
+    await chrome.storage.session.set({ [STATUS_KEY]: status });
+  } catch (err) {
+    // Never let a UI status write take down the recording/transcription
+    // flow itself — worst case the popup/button falls out of sync, which is
+    // recoverable, versus losing the rest of the meeting's audio.
+    console.error('[mova-flow] setStatus failed:', err);
+  }
 }
 
 export async function getSettings(): Promise<Settings> {
@@ -40,4 +47,20 @@ export async function getSettings(): Promise<Settings> {
 
 export async function setSettings(settings: Settings): Promise<void> {
   await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+}
+
+// Whether the offscreen document's origin has ever been granted microphone
+// access — a real permissions.query() check would ask about the CURRENT
+// page's origin, not the extension's, so it can't tell us this. Set once,
+// from a context that can actually request the grant (onboarding.ts, or the
+// popup banner) — see MIC_GRANTED_KEY's readers for why this matters.
+const MIC_GRANTED_KEY = 'movaFlowMicGranted';
+
+export async function getMicGranted(): Promise<boolean> {
+  const { [MIC_GRANTED_KEY]: granted } = await chrome.storage.local.get(MIC_GRANTED_KEY);
+  return granted === true;
+}
+
+export async function setMicGranted(granted: boolean): Promise<void> {
+  await chrome.storage.local.set({ [MIC_GRANTED_KEY]: granted });
 }
