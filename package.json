@@ -1,6 +1,6 @@
 {
   "name": "mova-flow-meet-recorder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Chrome extension that records Google Meet calls (tab audio + microphone) and transcribes them via a local Mova Flow server.",
   "private": true,
   "scripts": {
