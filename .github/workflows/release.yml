@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and package only — skip the Web Store upload and the GitHub release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build, package, and publish to Chrome Web Store
+    runs-on: ubuntu-latest
+
+    env:
+      # A manual run is a dry run unless explicitly unticked; a tag push is always real.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # The Web Store rejects an upload whose manifest version it has already
+      # seen — catch a forgotten bump here, before anything is sent.
+      - name: Check tag matches manifest version
+        if: github.ref_type == 'tag'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(node -p "require('./manifest.json').version")
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$manifest" ] || [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag doesn't match manifest.json ($manifest) / package.json ($pkg). Bump both before tagging."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Package extension
+        run: |
+          zip -r extension.zip manifest.json popup.html popup.css onboarding.html onboarding.css offscreen.html content.css icons dist -x "*.DS_Store"
+          unzip -l extension.zip
+
+      - name: Keep the package as a build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: extension
+          path: extension.zip
+
+      - name: Upload new version to Chrome Web Store
+        if: env.DRY_RUN != 'true'
+        run: |
+          npx chrome-webstore-upload-cli@3 upload \
+            --source extension.zip \
+            --extension-id "${{ secrets.CHROME_EXTENSION_ID }}" \
+            --client-id "${{ secrets.CHROME_CLIENT_ID }}" \
+            --client-secret "${{ secrets.CHROME_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.CHROME_REFRESH_TOKEN }}" \
+          || {
+            echo "::error::Web Store upload failed. Usual causes: the previous version is still in review (one submission at a time — wait, or cancel it in the dashboard), the version wasn't bumped, the Chrome Web Store API isn't enabled in the Google Cloud project, or the refresh token was revoked."
+            exit 1
+          }
+
+      - name: Publish the uploaded version
+        if: env.DRY_RUN != 'true'
+        run: |
+          npx chrome-webstore-upload-cli@3 publish \
+            --extension-id "${{ secrets.CHROME_EXTENSION_ID }}" \
+            --client-id "${{ secrets.CHROME_CLIENT_ID }}" \
+            --client-secret "${{ secrets.CHROME_CLIENT_SECRET }}" \
+            --refresh-token "${{ secrets.CHROME_REFRESH_TOKEN }}"
+
+      - name: Create GitHub release
+        if: env.DRY_RUN != 'true' && github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: extension.zip
+          generate_release_notes: true
