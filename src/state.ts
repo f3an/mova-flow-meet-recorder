@@ -6,7 +6,7 @@
 
 export type RecordingStatus =
   | { stage: 'idle' }
-  | { stage: 'recording'; tabTitle: string; startedAt: number; recordingName: string }
+  | { stage: 'recording'; tabTitle: string; startedAt: number; recordingName: string; tabId?: number }
   | { stage: 'processing'; message: string }
   | { stage: 'done'; result: string; detectedLanguage: string }
   | { stage: 'error'; message: string }
@@ -14,6 +14,19 @@ export type RecordingStatus =
   // blocked by the browser/OS, actually offline...) but the recording itself
   // is too valuable to just discard, so it went to Downloads instead.
   | { stage: 'saved-locally'; filename: string; reason: string };
+
+/** One caption block from Meet — see captions.ts. Times are seconds from
+ * the start of the recording. */
+export interface SpeakerTurn {
+  name: string;
+  start: number;
+  end: number;
+  /** Word count of the caption (not the words themselves) — lets the host
+   * tell how long the turn really lasted when Meet delivered it in one go. */
+  words: number;
+  /** The user's own captions. */
+  self?: boolean;
+}
 
 export interface Settings {
   host: string;
@@ -63,4 +76,24 @@ export async function getMicGranted(): Promise<boolean> {
 
 export async function setMicGranted(granted: boolean): Promise<void> {
   await chrome.storage.local.set({ [MIC_GRANTED_KEY]: granted });
+}
+
+// The caption timeline for the recording in progress. Written by the content
+// script in the Meet tab (the only place that can see the captions), read by
+// the offscreen document (via background.ts) when it uploads the recording.
+const TIMELINE_KEY = 'movaFlowSpeakerTimeline';
+
+export async function getSpeakerTimeline(): Promise<SpeakerTurn[]> {
+  const { [TIMELINE_KEY]: timeline } = await chrome.storage.session.get(TIMELINE_KEY);
+  return Array.isArray(timeline) ? timeline : [];
+}
+
+export async function setSpeakerTimeline(timeline: SpeakerTurn[]): Promise<void> {
+  try {
+    await chrome.storage.session.set({ [TIMELINE_KEY]: timeline });
+  } catch (err) {
+    // Names are a nice-to-have on top of the transcript — never worth
+    // disturbing the recording over.
+    console.error('[mova-flow] setSpeakerTimeline failed:', err);
+  }
 }

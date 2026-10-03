@@ -3,7 +3,7 @@
 // AudioContext. background.ts just hands this a tabCapture stream id and a
 // start/stop signal; everything from mixing to uploading happens here.
 import { transcribe } from './api';
-import type { RecordingStatus, Settings } from './state';
+import type { RecordingStatus, Settings, SpeakerTurn } from './state';
 import { recordingToWav } from './wav';
 
 // chrome.storage is unavailable in the offscreen document on at least some
@@ -16,6 +16,9 @@ async function setStatus(status: RecordingStatus): Promise<void> {
 }
 async function getSettings(): Promise<Settings> {
   return chrome.runtime.sendMessage({ target: 'background', type: 'get-settings' });
+}
+async function getSpeakerTimeline(): Promise<SpeakerTurn[]> {
+  return chrome.runtime.sendMessage({ target: 'background', type: 'get-speaker-timeline' });
 }
 
 interface StartMessage {
@@ -65,9 +68,16 @@ async function startRecording(streamId: string, name: string): Promise<void> {
 
     audioContext = new AudioContext();
     const destination = audioContext.createMediaStreamDestination();
+    // Mic on the left channel, the call on the right — never mixed — so the
+    // host can label each line as said by the user or by someone else
+    // (whisper-cli --diarize picks whichever channel is louder per segment).
+    // Merger inputs are mono, so a stereo tab stream gets downmixed into the
+    // right channel rather than spilling into the left.
+    const merger = audioContext.createChannelMerger(2);
+    merger.connect(destination);
 
     const tabSource = audioContext.createMediaStreamSource(tabStream);
-    tabSource.connect(destination);
+    tabSource.connect(merger, 0, 1);
     // getUserMedia({chromeMediaSource: 'tab'}) silently mutes the tab's normal
     // playback — reconnect it to the speakers or the user hears nothing for
     // the whole meeting.
@@ -76,7 +86,7 @@ async function startRecording(streamId: string, name: string): Promise<void> {
     const micSource = audioContext.createMediaStreamSource(micStream);
     // Deliberately NOT connected to audioContext.destination — that would
     // echo the user's own mic back out of their speakers.
-    micSource.connect(destination);
+    micSource.connect(merger, 0, 0);
 
     tracks = [...tabStream.getTracks(), ...micStream.getTracks()];
     chunks = [];
@@ -162,7 +172,11 @@ async function stopRecordingAndTranscribe(): Promise<void> {
 
   try {
     const settings = await getSettings();
-    const result = await transcribe(settings, wav, 'auto', `${recordingName}.wav`, (message) => {
+    // Read only now, after the conversion above: that gives the Meet tab's
+    // own final caption flush (see content.ts) time to land.
+    const timeline = await getSpeakerTimeline().catch(() => []);
+    const speakers = { mode: 'me-others', timeline } as const;
+    const result = await transcribe(settings, wav, 'auto', `${recordingName}.wav`, speakers, (message) => {
       void setStatus({ stage: 'processing', message });
     });
     await setStatus({ stage: 'done', result: result.text, detectedLanguage: result.detectedLanguage });

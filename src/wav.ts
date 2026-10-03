@@ -1,10 +1,13 @@
 // Mirrors Mova Flow's own renderer.ts encodeWav()/prepareFileForUpload() — the
 // server's whisper-cli.exe only decodes audio via miniaudio, which doesn't
 // support webm/opus (what MediaRecorder produces), so recordings are always
-// resampled to 16kHz mono and re-encoded as plain WAV before upload.
+// resampled to 16kHz and re-encoded as plain WAV before upload. Unlike the
+// app's Upload tab this keeps both channels: the recording is mic-left,
+// call-right (see offscreen.ts), and the host tells the speakers apart by
+// which channel is louder. whisper itself still hears the mix.
 
-/** Decodes a recorded Blob and resamples it to 16kHz mono. */
-export async function toMonoPCM16k(blob: Blob): Promise<AudioBuffer> {
+/** Decodes a recorded Blob and resamples it to 16kHz stereo. */
+export async function toStereoPCM16k(blob: Blob): Promise<AudioBuffer> {
   const arrayBuffer = await blob.arrayBuffer();
   const decodeCtx = new AudioContext();
   let decoded: AudioBuffer;
@@ -15,7 +18,7 @@ export async function toMonoPCM16k(blob: Blob): Promise<AudioBuffer> {
   }
 
   const targetRate = 16000;
-  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * targetRate), targetRate);
+  const offline = new OfflineAudioContext(2, Math.ceil(decoded.duration * targetRate), targetRate);
   const source = offline.createBufferSource();
   source.buffer = decoded;
   source.connect(offline.destination);
@@ -23,11 +26,13 @@ export async function toMonoPCM16k(blob: Blob): Promise<AudioBuffer> {
   return offline.startRendering();
 }
 
-/** Writes a minimal 16-bit PCM WAV (44-byte RIFF header) from a mono AudioBuffer. */
+/** Writes a minimal 16-bit PCM WAV (44-byte RIFF header), channels interleaved. */
 export function encodeWav(buffer: AudioBuffer): Blob {
-  const samples = buffer.getChannelData(0);
+  const channels = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
+  const numChannels = channels.length;
   const sampleRate = buffer.sampleRate;
-  const dataSize = samples.length * 2;
+  const blockAlign = numChannels * 2;
+  const dataSize = buffer.length * blockAlign;
   const out = new ArrayBuffer(44 + dataSize);
   const view = new DataView(out);
 
@@ -41,24 +46,27 @@ export function encodeWav(buffer: AudioBuffer): Blob {
   writeString(12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // mono
+  view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true); // byte rate (mono, 16-bit)
-  view.setUint16(32, 2, true); // block align
+  view.setUint32(28, sampleRate * blockAlign, true); // byte rate
+  view.setUint16(32, blockAlign, true);
   view.setUint16(34, 16, true); // bits per sample
   writeString(36, 'data');
   view.setUint32(40, dataSize, true);
 
   let offset = 44;
-  for (let i = 0; i < samples.length; i++, offset += 2) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  for (let i = 0; i < buffer.length; i++) {
+    for (const samples of channels) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      offset += 2;
+    }
   }
 
   return new Blob([out], { type: 'audio/wav' });
 }
 
 export async function recordingToWav(blob: Blob): Promise<Blob> {
-  const pcm = await toMonoPCM16k(blob);
+  const pcm = await toStereoPCM16k(blob);
   return encodeWav(pcm);
 }

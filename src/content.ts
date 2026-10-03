@@ -7,7 +7,8 @@
 // control-bar region instead, which has held up better across redesigns,
 // but nothing here is guaranteed stable.
 import type { RecordingStatus } from './state';
-import { getMicGranted } from './state';
+import { getMicGranted, getSpeakerTimeline, setSpeakerTimeline } from './state';
+import { CaptionLogger } from './captions';
 
 const BUTTON_ID = 'mova-flow-record-btn';
 
@@ -61,6 +62,8 @@ async function onClick(): Promise<void> {
   btn.disabled = true;
   try {
     if (stage === 'recording') {
+      // Flush first so this tab's final captions are in before the upload.
+      await setSpeakerTimeline(captions.snapshot);
       await chrome.runtime.sendMessage({ type: 'stop-recording' });
     } else if (stage !== 'processing') {
       await chrome.runtime.sendMessage({ type: 'start-recording' });
@@ -90,9 +93,39 @@ function ensureButton(): void {
   chrome.storage.session.get('movaFlowStatus').then(({ movaFlowStatus }) => render(movaFlowStatus));
 }
 
+// Caption logging follows the recording status, whoever started or stopped
+// it (this button or the popup). The timeline is flushed to session storage
+// as it grows, not only at the end: a stop from the popup reaches the
+// offscreen document and this tab independently, so the final flush below
+// can land after the upload has already read whatever was there.
+const captions = new CaptionLogger();
+let flushTimer: number | null = null;
+
+async function syncCaptions(status: RecordingStatus | undefined): Promise<void> {
+  if (status?.stage === 'recording') {
+    if (flushTimer !== null) return;
+    // Only the tab actually being recorded — another Meet tab (a lobby, a
+    // second call) must neither log nor get its captions switched on.
+    if (!(await chrome.runtime.sendMessage({ type: 'is-recording-tab' }))) return;
+    const earlier = await getSpeakerTimeline();
+    if (flushTimer !== null) return;
+    captions.start(status.startedAt, earlier);
+    flushTimer = window.setInterval(() => void setSpeakerTimeline(captions.snapshot), 5000);
+  } else if (flushTimer !== null) {
+    window.clearInterval(flushTimer);
+    flushTimer = null;
+    void setSpeakerTimeline(captions.stop());
+  }
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'session' && changes.movaFlowStatus) render(changes.movaFlowStatus.newValue);
+  if (area === 'session' && changes.movaFlowStatus) {
+    render(changes.movaFlowStatus.newValue);
+    void syncCaptions(changes.movaFlowStatus.newValue);
+  }
 });
+// The tab may have been reloaded mid-recording — pick logging back up.
+chrome.storage.session.get('movaFlowStatus').then(({ movaFlowStatus }) => void syncCaptions(movaFlowStatus));
 
 // Meet re-renders the toolbar on call-state changes (screen share starts,
 // participants panel opens, etc.), which can wipe out a plain DOM insertion

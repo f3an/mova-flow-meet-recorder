@@ -2,7 +2,7 @@
 // no DOM, so all of that lives in the offscreen document (offscreen.ts).
 // This file's only job is: find the right tab, get Chrome's permission to
 // capture it, and hand that off.
-import { setStatus, getSettings, RecordingStatus } from './state';
+import { setStatus, getStatus, getSettings, getSpeakerTimeline, setSpeakerTimeline, RecordingStatus } from './state';
 
 // chrome.storage.session defaults to extension-pages-only access — the
 // content script injected into Meet needs to read/write it too, to know
@@ -12,7 +12,7 @@ void chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED
 const OFFSCREEN_URL = 'offscreen.html';
 
 interface PopupMessage {
-  type: 'start-recording' | 'stop-recording' | 'open-popup';
+  type: 'start-recording' | 'stop-recording' | 'open-popup' | 'is-recording-tab';
 }
 interface SetStatusMessage {
   target: 'background';
@@ -21,7 +21,7 @@ interface SetStatusMessage {
 }
 interface GetSettingsMessage {
   target: 'background';
-  type: 'get-settings';
+  type: 'get-settings' | 'get-speaker-timeline';
 }
 
 // The offscreen document has no visible surface, so it can never show the
@@ -74,11 +74,15 @@ async function startRecording(): Promise<void> {
   );
 
   const recordingName = buildRecordingName(tab.url);
+  // Cleared here rather than by the Meet tab, which also resumes logging
+  // into the existing timeline after a reload mid-recording.
+  await setSpeakerTimeline([]);
   await setStatus({
     stage: 'recording',
     tabTitle: tab.title || 'Google Meet',
     startedAt: Date.now(),
     recordingName,
+    tabId: tab.id,
   });
   await chrome.runtime.sendMessage({
     target: 'offscreen',
@@ -122,6 +126,17 @@ chrome.runtime.onMessage.addListener(
         getSettings().then(sendResponse);
         return true;
       }
+      if (message.type === 'get-speaker-timeline') {
+        getSpeakerTimeline().then(sendResponse);
+        return true;
+      }
+    }
+    // Content scripts can't see their own tab id — only the sender here can.
+    if (message.type === 'is-recording-tab') {
+      getStatus().then((status) =>
+        sendResponse(status.stage === 'recording' && status.tabId === _sender.tab?.id),
+      );
+      return true;
     }
     if (message.type === 'open-popup') {
       openPopup().then(() => sendResponse({ ok: true }));

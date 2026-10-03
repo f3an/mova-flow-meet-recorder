@@ -2,7 +2,7 @@
 // does (see server.ts / renderer.ts in the main Mova-Flow repo) — this
 // extension is just another client on the network, authenticating with the
 // same shared secret and short-lived bearer token.
-import type { Settings } from './state';
+import type { Settings, SpeakerTurn } from './state';
 
 export interface TranscribeResult {
   text: string;
@@ -51,6 +51,10 @@ export async function transcribe(
   wav: Blob,
   language: string,
   filename: string,
+  /** "me-others": the WAV is stereo with the user's mic on the left and the
+   * call on the right, so the host labels each line by speaker — by name,
+   * wherever the caption timeline covers it. */
+  speakers: { mode: 'me-others'; timeline: SpeakerTurn[] } | null,
   onProgress: ProgressCb,
 ): Promise<TranscribeResult> {
   const base = baseUrl(settings);
@@ -60,6 +64,10 @@ export async function transcribe(
   const form = new FormData();
   form.append('file', wav, filename);
   form.append('language', language);
+  if (speakers) {
+    form.append('speakers', speakers.mode);
+    if (speakers.timeline.length) form.append('speaker_timeline', JSON.stringify(speakers.timeline));
+  }
 
   const uploadRes = await fetch(`${base}/api/transcribe`, {
     method: 'POST',
