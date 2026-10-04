@@ -26,6 +26,12 @@
       "matches": ["https://meet.google.com/*"],
       "js": ["dist/content.js"],
       "css": ["content.css"]
+    },
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["dist/meetAudioHook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "permissions": ["tabCapture", "offscreen", "storage", "activeTab", "downloads"],

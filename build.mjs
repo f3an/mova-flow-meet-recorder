@@ -3,7 +3,7 @@ import * as esbuild from 'esbuild';
 const watch = process.argv.includes('--watch');
 
 const options = {
-  entryPoints: ['src/background.ts', 'src/offscreen.ts', 'src/popup.ts', 'src/content.ts', 'src/onboarding.ts'],
+  entryPoints: ['src/background.ts', 'src/offscreen.ts', 'src/popup.ts', 'src/content.ts', 'src/onboarding.ts', 'src/meetAudioHook.ts'],
   bundle: true,
   outdir: 'dist',
   platform: 'browser',

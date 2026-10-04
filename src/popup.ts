@@ -1,5 +1,5 @@
 import { checkConnection } from './api';
-import { getSettings, getStatus, setMicGranted, RecordingStatus } from './state';
+import { getMeetVoiceMode, getSettings, getStatus, setMeetVoiceMode, setMicGranted, RecordingStatus } from './state';
 import { initSettingsPanel } from './settingsPanel';
 
 const statusArea = document.getElementById('statusArea') as HTMLDivElement;
@@ -26,6 +26,11 @@ let elapsedTimer: ReturnType<typeof setInterval> | null = null;
 async function renderMicBannerIfNeeded(): Promise<void> {
   const micBanner = document.getElementById('micBanner');
   if (!micBanner) return;
+  // Voice taken from Meet's own stream — the microphone is never opened.
+  if (await getMeetVoiceMode()) {
+    micBanner.innerHTML = '';
+    return;
+  }
   try {
     const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
     if (status.state === 'granted') return;
@@ -199,3 +204,12 @@ async function init(): Promise<void> {
 }
 
 void init();
+
+const meetVoiceCheckbox = document.getElementById('meetVoiceCheckbox') as HTMLInputElement | null;
+if (meetVoiceCheckbox) {
+  void getMeetVoiceMode().then((enabled) => (meetVoiceCheckbox.checked = enabled));
+  meetVoiceCheckbox.addEventListener('change', async () => {
+    await setMeetVoiceMode(meetVoiceCheckbox.checked);
+    await renderMicBannerIfNeeded();
+  });
+}

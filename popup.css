@@ -158,3 +158,11 @@ input {
   margin-top: 6px;
   min-height: 14px;
 }
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}

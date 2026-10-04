@@ -4,7 +4,7 @@
 // start/stop signal; everything from mixing to uploading happens here.
 import { transcribe } from './api';
 import type { RecordingStatus, Settings, SpeakerTurn } from './state';
-import { recordingToWav } from './wav';
+import { mergeToStereoWav, recordingToWav } from './wav';
 
 // chrome.storage is unavailable in the offscreen document on at least some
 // browsers (observed on Brave — chrome.storage itself is undefined here,
@@ -27,6 +27,9 @@ interface StartMessage {
   streamId: string;
   tabTitle: string;
   recordingName: string;
+  /** EXPERIMENTAL: no microphone — the "me" channel arrives from the Meet
+   * page over a port instead (see content.ts / meetAudioHook.ts). */
+  meetVoice?: boolean;
 }
 interface StopMessage {
   target: 'offscreen';
@@ -45,9 +48,45 @@ let chunks: Blob[] = [];
 let audioContext: AudioContext | null = null;
 let tracks: MediaStreamTrack[] = [];
 let recordingName = 'meet-record';
+let callStartedAt = 0;
+let meetVoice = false;
 
-async function startRecording(streamId: string, name: string): Promise<void> {
+// The user's side, as recorded inside the Meet page — collected as it streams in.
+interface MeRecording {
+  startedAt: number;
+  hasTrack: boolean;
+  parts: Uint8Array<ArrayBuffer>[];
+  stopped: Promise<void>;
+}
+let me: MeRecording | null = null;
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'mova-flow-me') return;
+  let markStopped: () => void = () => {};
+  const recording: MeRecording = {
+    startedAt: 0,
+    hasTrack: false,
+    parts: [],
+    stopped: new Promise<void>((resolve) => (markStopped = resolve)),
+  };
+  me = recording;
+  port.onMessage.addListener((msg: { type: string; startedAt?: number; hasTrack?: boolean; data?: string }) => {
+    if (msg.type === 'started') {
+      recording.startedAt = msg.startedAt ?? 0;
+      recording.hasTrack = !!msg.hasTrack;
+    } else if (msg.type === 'chunk' && msg.data) {
+      recording.parts.push(Uint8Array.from(atob(msg.data), (c) => c.charCodeAt(0)));
+    } else if (msg.type === 'stopped') {
+      markStopped();
+    }
+  });
+  // Tab closed or reloaded mid-call: keep whatever arrived.
+  port.onDisconnect.addListener(() => markStopped());
+});
+
+async function startRecording(streamId: string, name: string, useMeetVoice: boolean): Promise<void> {
   recordingName = name;
+  meetVoice = useMeetVoice;
   // chromeMediaSource/chromeMediaSourceId aren't in the standard
   // MediaTrackConstraints type — this shape is Chrome-extension-specific.
   const tabStream = await navigator.mediaDevices.getUserMedia({
@@ -64,7 +103,8 @@ async function startRecording(streamId: string, name: string): Promise<void> {
     // offscreen document has no visible surface to show that prompt on — if
     // the grant isn't already there (see onboarding.ts / the popup banner),
     // this throws NotAllowedError instead of prompting.
-    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // In "voice from Meet" mode the microphone is never opened at all.
+    const micStream = meetVoice ? null : await navigator.mediaDevices.getUserMedia({ audio: true });
 
     audioContext = new AudioContext();
     const destination = audioContext.createMediaStreamDestination();
@@ -83,18 +123,21 @@ async function startRecording(streamId: string, name: string): Promise<void> {
     // the whole meeting.
     tabSource.connect(audioContext.destination);
 
-    const micSource = audioContext.createMediaStreamSource(micStream);
-    // Deliberately NOT connected to audioContext.destination — that would
-    // echo the user's own mic back out of their speakers.
-    micSource.connect(merger, 0, 0);
+    if (micStream) {
+      const micSource = audioContext.createMediaStreamSource(micStream);
+      // Deliberately NOT connected to audioContext.destination — that would
+      // echo the user's own mic back out of their speakers.
+      micSource.connect(merger, 0, 0);
+    }
 
-    tracks = [...tabStream.getTracks(), ...micStream.getTracks()];
+    tracks = [...tabStream.getTracks(), ...(micStream?.getTracks() ?? [])];
     chunks = [];
     recorder = new MediaRecorder(destination.stream, { mimeType: 'audio/webm;codecs=opus' });
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data);
     };
     recorder.start(1000);
+    callStartedAt = Date.now();
   } catch (err) {
     // Anything past this point failing (mic permission, AudioContext,
     // MediaRecorder) must not leave tabStream's tracks running — that's what
@@ -139,6 +182,22 @@ async function reportToClientHistory(wav: Blob, language: string, text: string):
   }
 }
 
+/** The normal path is the call recording on its own (mic already on the left
+ * channel). In "voice from Meet" mode the left channel is still empty here
+ * and gets the page's recording merged in — or stays silent if the hook
+ * never saw an outgoing track. */
+async function buildWav(callWebm: Blob): Promise<Blob> {
+  const recording = me;
+  me = null;
+  if (!meetVoice || !recording) return recordingToWav(callWebm);
+  // The Meet tab stops its own recorder when it sees the status change;
+  // give its last chunks a moment to arrive.
+  await Promise.race([recording.stopped, new Promise((r) => setTimeout(r, 10000))]);
+  if (!recording.parts.length) return recordingToWav(callWebm);
+  const meWebm = new Blob(recording.parts, { type: 'audio/webm' });
+  return mergeToStereoWav(callWebm, meWebm, (recording.startedAt - callStartedAt) / 1000);
+}
+
 async function stopRecordingAndTranscribe(): Promise<void> {
   if (!recorder) return;
   const finished = new Promise<void>((resolve) => {
@@ -160,7 +219,7 @@ async function stopRecordingAndTranscribe(): Promise<void> {
 
   let wav: Blob;
   try {
-    wav = await recordingToWav(webm);
+    wav = await buildWav(webm);
   } catch {
     // Conversion itself failed (rare) — still don't lose an entire meeting
     // over it. The raw recording won't upload straight to Mova Flow (webm
@@ -197,6 +256,6 @@ async function stopRecordingAndTranscribe(): Promise<void> {
 
 chrome.runtime.onMessage.addListener((message: OffscreenMessage) => {
   if (message.target !== 'offscreen') return;
-  if (message.type === 'start-recording') void startRecording(message.streamId, message.recordingName);
+  if (message.type === 'start-recording') void startRecording(message.streamId, message.recordingName, !!message.meetVoice);
   if (message.type === 'stop-recording') void stopRecordingAndTranscribe();
 });

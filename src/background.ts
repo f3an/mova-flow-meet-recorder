@@ -2,7 +2,7 @@
 // no DOM, so all of that lives in the offscreen document (offscreen.ts).
 // This file's only job is: find the right tab, get Chrome's permission to
 // capture it, and hand that off.
-import { setStatus, getStatus, getSettings, getSpeakerTimeline, setSpeakerTimeline, RecordingStatus } from './state';
+import { setStatus, getStatus, getSettings, getSpeakerTimeline, setSpeakerTimeline, getMeetVoiceMode, RecordingStatus } from './state';
 
 // chrome.storage.session defaults to extension-pages-only access — the
 // content script injected into Meet needs to read/write it too, to know
@@ -90,6 +90,7 @@ async function startRecording(): Promise<void> {
     streamId,
     tabTitle: tab.title,
     recordingName,
+    meetVoice: await getMeetVoiceMode(),
   });
 }
 

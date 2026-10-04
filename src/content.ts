@@ -7,7 +7,7 @@
 // control-bar region instead, which has held up better across redesigns,
 // but nothing here is guaranteed stable.
 import type { RecordingStatus } from './state';
-import { getMicGranted, getSpeakerTimeline, setSpeakerTimeline } from './state';
+import { getMeetVoiceMode, getMicGranted, getSpeakerTimeline, setSpeakerTimeline } from './state';
 import { CaptionLogger } from './captions';
 
 const BUTTON_ID = 'mova-flow-record-btn';
@@ -54,7 +54,8 @@ async function onClick(): Promise<void> {
   // Starting fresh but the mic grant this needs was never obtained — same
   // deal: the popup has the "Allow microphone access" banner this button
   // itself has no visible surface to show.
-  if (stage === 'idle' && !(await getMicGranted())) {
+  // (Not needed at all when the user's voice comes from Meet's own stream.)
+  if (stage === 'idle' && !(await getMeetVoiceMode()) && !(await getMicGranted())) {
     await chrome.runtime.sendMessage({ type: 'open-popup' });
     return;
   }
@@ -64,6 +65,7 @@ async function onClick(): Promise<void> {
     if (stage === 'recording') {
       // Flush first so this tab's final captions are in before the upload.
       await setSpeakerTimeline(captions.snapshot);
+      stopMeetVoice();
       await chrome.runtime.sendMessage({ type: 'stop-recording' });
     } else if (stage !== 'processing') {
       await chrome.runtime.sendMessage({ type: 'start-recording' });
@@ -101,6 +103,46 @@ function ensureButton(): void {
 const captions = new CaptionLogger();
 let flushTimer: number | null = null;
 
+// EXPERIMENTAL "voice from Meet": meetAudioHook.ts (page context) records the
+// audio Meet sends and posts it here in chunks; this relays them over a port
+// to the offscreen document, which merges them in as the "me" channel. Sent
+// as it's recorded, not in one piece at the end, so an hour-long call never
+// has to fit in a single extension message.
+let mePort: chrome.runtime.Port | null = null;
+
+function toBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+window.addEventListener('message', (event) => {
+  if (event.source !== window || event.data?.source !== 'mova-flow-page' || !mePort) return;
+  const { type } = event.data;
+  if (type === 'me-started') {
+    mePort.postMessage({ type: 'started', startedAt: event.data.startedAt, hasTrack: event.data.hasTrack });
+  } else if (type === 'me-chunk') {
+    mePort.postMessage({ type: 'chunk', data: toBase64(event.data.data) });
+  } else if (type === 'me-stopped') {
+    mePort.postMessage({ type: 'stopped' });
+    mePort.disconnect();
+    mePort = null;
+  }
+});
+
+async function startMeetVoice(): Promise<void> {
+  if (!(await getMeetVoiceMode())) return;
+  mePort = chrome.runtime.connect({ name: 'mova-flow-me' });
+  window.postMessage({ source: 'mova-flow', type: 'me-start' }, window.location.origin);
+}
+
+function stopMeetVoice(): void {
+  if (mePort) window.postMessage({ source: 'mova-flow', type: 'me-stop' }, window.location.origin);
+}
+
 async function syncCaptions(status: RecordingStatus | undefined): Promise<void> {
   if (status?.stage === 'recording') {
     if (flushTimer !== null) return;
@@ -110,10 +152,12 @@ async function syncCaptions(status: RecordingStatus | undefined): Promise<void> 
     const earlier = await getSpeakerTimeline();
     if (flushTimer !== null) return;
     captions.start(status.startedAt, earlier);
+    void startMeetVoice();
     flushTimer = window.setInterval(() => void setSpeakerTimeline(captions.snapshot), 5000);
   } else if (flushTimer !== null) {
     window.clearInterval(flushTimer);
     flushTimer = null;
+    stopMeetVoice();
     void setSpeakerTimeline(captions.stop());
   }
 }

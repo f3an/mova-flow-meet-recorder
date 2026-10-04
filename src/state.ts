@@ -97,3 +97,17 @@ export async function setSpeakerTimeline(timeline: SpeakerTurn[]): Promise<void>
     console.error('[mova-flow] setSpeakerTimeline failed:', err);
   }
 }
+
+// EXPERIMENTAL: take the user's side of the call from the audio Meet itself
+// sends (see meetAudioHook.ts) instead of opening the microphone. The
+// extension then never asks for — or touches — the mic at all.
+const MEET_VOICE_KEY = 'movaFlowMeetVoice';
+
+export async function getMeetVoiceMode(): Promise<boolean> {
+  const { [MEET_VOICE_KEY]: enabled } = await chrome.storage.local.get(MEET_VOICE_KEY);
+  return enabled === true;
+}
+
+export async function setMeetVoiceMode(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({ [MEET_VOICE_KEY]: enabled });
+}

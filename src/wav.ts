@@ -70,3 +70,37 @@ export async function recordingToWav(blob: Blob): Promise<Blob> {
   const pcm = await toStereoPCM16k(blob);
   return encodeWav(pcm);
 }
+
+/** Decodes a recorded Blob and resamples it to 16kHz mono. */
+async function toMonoPCM16k(blob: Blob): Promise<AudioBuffer> {
+  const decodeCtx = new AudioContext();
+  let decoded: AudioBuffer;
+  try {
+    decoded = await decodeCtx.decodeAudioData(await blob.arrayBuffer());
+  } finally {
+    await decodeCtx.close();
+  }
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
+  const source = offline.createBufferSource();
+  source.buffer = decoded;
+  source.connect(offline.destination);
+  source.start();
+  return offline.startRendering();
+}
+
+/** EXPERIMENTAL "voice from Meet": the call recording (right channel) plus
+ * the user's side recorded separately inside the Meet page (see
+ * meetAudioHook.ts), placed on the left channel at `meOffsetSec` — when the
+ * page's recorder started relative to the call recorder. */
+export async function mergeToStereoWav(callBlob: Blob, meBlob: Blob, meOffsetSec: number): Promise<Blob> {
+  const call = await toStereoPCM16k(callBlob);
+  const me = await toMonoPCM16k(meBlob);
+  const out = new AudioBuffer({ numberOfChannels: 2, length: call.length, sampleRate: call.sampleRate });
+  out.copyToChannel(call.getChannelData(1), 1);
+  const left = new Float32Array(call.length);
+  const shift = Math.round(meOffsetSec * call.sampleRate);
+  const meData = me.getChannelData(0);
+  for (let i = Math.max(0, shift); i < left.length && i - shift < meData.length; i++) left[i] = meData[i - shift];
+  out.copyToChannel(left, 0);
+  return encodeWav(out);
+}
