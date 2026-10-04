@@ -166,3 +166,13 @@ input {
   font-size: 13px;
   cursor: pointer;
 }
+
+.checkbox-row input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.checkbox-row span {
+  text-align: left;
+}
