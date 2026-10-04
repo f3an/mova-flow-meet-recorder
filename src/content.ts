@@ -7,7 +7,7 @@
 // control-bar region instead, which has held up better across redesigns,
 // but nothing here is guaranteed stable.
 import type { RecordingStatus } from './state';
-import { getMeetVoiceMode, getMicGranted, getSpeakerTimeline, setSpeakerTimeline } from './state';
+import { getSpeakerTimeline, setSpeakerTimeline } from './state';
 import { CaptionLogger } from './captions';
 
 const BUTTON_ID = 'mova-flow-record-btn';
@@ -42,20 +42,11 @@ async function onClick(): Promise<void> {
   const { movaFlowStatus } = await chrome.storage.session.get('movaFlowStatus');
   const stage = (movaFlowStatus as RecordingStatus | undefined)?.stage ?? 'idle';
 
-  // Something already went wrong (mic denied, host unreachable, conversion
+  // Something already went wrong (host unreachable, conversion
   // failed...) — open the popup to show why and let its own controls (Try
   // again / Add host / New recording) handle it, rather than silently
   // retrying the same thing that just failed.
   if (stage === 'error' || stage === 'saved-locally') {
-    await chrome.runtime.sendMessage({ type: 'open-popup' });
-    return;
-  }
-
-  // Starting fresh but the mic grant this needs was never obtained — same
-  // deal: the popup has the "Allow microphone access" banner this button
-  // itself has no visible surface to show.
-  // (Not needed at all when the user's voice comes from Meet's own stream.)
-  if (stage === 'idle' && !(await getMeetVoiceMode()) && !(await getMicGranted())) {
     await chrome.runtime.sendMessage({ type: 'open-popup' });
     return;
   }
@@ -103,7 +94,7 @@ function ensureButton(): void {
 const captions = new CaptionLogger();
 let flushTimer: number | null = null;
 
-// EXPERIMENTAL "voice from Meet": meetAudioHook.ts (page context) records the
+// The user's own voice: meetAudioHook.ts (page context) records the
 // audio Meet sends and posts it here in chunks; this relays them over a port
 // to the offscreen document, which merges them in as the "me" channel. Sent
 // as it's recorded, not in one piece at the end, so an hour-long call never
@@ -133,8 +124,7 @@ window.addEventListener('message', (event) => {
   }
 });
 
-async function startMeetVoice(): Promise<void> {
-  if (!(await getMeetVoiceMode())) return;
+function startMeetVoice(): void {
   mePort = chrome.runtime.connect({ name: 'mova-flow-me' });
   window.postMessage({ source: 'mova-flow', type: 'me-start' }, window.location.origin);
 }
@@ -152,7 +142,7 @@ async function syncCaptions(status: RecordingStatus | undefined): Promise<void> 
     const earlier = await getSpeakerTimeline();
     if (flushTimer !== null) return;
     captions.start(status.startedAt, earlier);
-    void startMeetVoice();
+    startMeetVoice();
     flushTimer = window.setInterval(() => void setSpeakerTimeline(captions.snapshot), 5000);
   } else if (flushTimer !== null) {
     window.clearInterval(flushTimer);

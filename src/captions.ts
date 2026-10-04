@@ -3,7 +3,7 @@
 // name header and the words below it, which Meet keeps rewriting in place as
 // the speaker goes on. The host uses this timeline only to put names on the
 // "other side" of the call — telling the user apart from everyone else is
-// already done by the recording's channels (mic left, tab right).
+// already done by the recording's channels (user left, call right).
 //
 // Same caveat as the toolbar button in content.ts: Meet's markup is
 // obfuscated and changes without notice. Every lookup here tries the most
@@ -17,7 +17,7 @@ import type { SpeakerTurn } from './state';
 
 const CAPTIONS_BUTTON = 'button[jsname="RrG0hf"]';
 // Meet labels the user's own captions with a localized "You". Their side is
-// known from the mic channel anyway, so these only need to be kept out of
+// known from the left channel anyway, so these only need to be kept out of
 // the names given to other people — a miss here just means a stray "You"
 // on a crosstalk line, not a wrong attribution.
 const SELF_LABELS = new Set(['you', 'ви', 'вы', 'ty', 'du', 'vous', 'tú', 'tu', 'voi', 'jij', 'você', 'sen', 'siz']);

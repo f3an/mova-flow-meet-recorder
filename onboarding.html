@@ -19,7 +19,7 @@
       <h1>Meeting notes, without the cloud</h1>
       <p>
         Mova Flow records your Google Meet calls and transcribes them on your own
-        Mova Flow host — nothing is ever sent anywhere else. Three quick things
+        Mova Flow host — nothing is ever sent anywhere else. Two quick things
         to set up, then you're recording.
       </p>
     </section>
@@ -78,24 +78,18 @@
       <section class="step">
         <div class="step-num">3</div>
         <div class="step-body">
-          <h2>Allow microphone access</h2>
+          <h2>No microphone access needed</h2>
           <p>
-            Meet never plays your own voice back through the tab — only the other
-            participants'. Without this, transcripts would be missing everything
-            <em>you</em> said. Chrome can only ask for this on a visible page like
-            this one, not from the hidden recorder that runs during a call.
+            Your side of the conversation is taken from the audio Meet itself sends to the other
+            participants — so it's silent whenever you're muted in Meet, and this extension never
+            asks for or opens your microphone. Everyone else is captured from the call's tab.
           </p>
-          <div id="statusArea">
-            <div class="record-row">
-              <button class="action" id="grantBtn">Allow microphone access</button>
-            </div>
-          </div>
         </div>
       </section>
     </div>
 
-    <section class="done" id="doneSection" hidden>
-      <div class="banner">You're all set. Close this tab and start a Meet call.</div>
+    <section class="done" id="doneSection">
+      <div class="banner">Once the host is saved, you're all set — close this tab and start a Meet call.</div>
     </section>
   </main>
 

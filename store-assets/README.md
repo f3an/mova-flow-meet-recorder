@@ -19,5 +19,5 @@ Repository secrets `CHROME_EXTENSION_ID`, `CHROME_CLIENT_ID`, `CHROME_CLIENT_SEC
 
 ## In this folder
 
-- `screenshots/` — the 1280x800 listing screenshots.
+- `screenshots/` — the 1280x800 listing screenshots (setup page, idle popup, recording popup, finished transcript with speaker names).
 - `mova-flow-meet-recorder-0.1.0.zip` — the package of the first, manually submitted version; kept for reference only.

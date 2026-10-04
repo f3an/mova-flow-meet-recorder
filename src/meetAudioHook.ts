@@ -1,8 +1,8 @@
-// EXPERIMENTAL — runs in Meet's own page context ("world": "MAIN" in
+// Runs in Meet's own page context ("world": "MAIN" in
 // manifest.json), before any of Meet's scripts, so it can see the audio
 // track Meet actually sends to the other participants: after Meet's own
 // processing, and silent whenever the user is muted in Meet. That track
-// becomes the "me" channel instead of the raw microphone.
+// becomes the "me" channel — the extension never opens the microphone itself.
 //
 // Everything here leans on standard WebRTC entry points (addTrack,
 // addTransceiver, replaceTrack), not on Meet internals — but which sender

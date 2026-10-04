@@ -47,13 +47,13 @@ export async function initSettingsPanel(): Promise<void> {
     const port = Number(portInput.value) || 5000;
     const secret = secretInput.value.trim();
 
-    const granted = await chrome.permissions.request({ origins: [`http://${host}:${port}/*`] });
-    if (!granted) {
-      settingsResult.textContent = 'Permission to reach that host was denied.';
-      return;
-    }
+    // Save before asking for the host permission: the browser's permission
+    // prompt can close the popup, and anything after the await would never
+    // run — which is why saving used to only stick on the second try.
     await setSettings({ host, port, secret });
     settingsResult.textContent = 'Saved.';
+    const granted = await chrome.permissions.request({ origins: [`http://${host}:${port}/*`] });
+    if (!granted) settingsResult.textContent = 'Saved, but permission to reach that host was denied.';
   });
 
   document.getElementById('testConnectionBtn')?.addEventListener('click', async () => {

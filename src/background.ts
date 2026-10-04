@@ -2,7 +2,7 @@
 // no DOM, so all of that lives in the offscreen document (offscreen.ts).
 // This file's only job is: find the right tab, get Chrome's permission to
 // capture it, and hand that off.
-import { setStatus, getStatus, getSettings, getSpeakerTimeline, setSpeakerTimeline, getMeetVoiceMode, RecordingStatus } from './state';
+import { setStatus, getStatus, getSettings, getSpeakerTimeline, setSpeakerTimeline, RecordingStatus } from './state';
 
 // chrome.storage.session defaults to extension-pages-only access — the
 // content script injected into Meet needs to read/write it too, to know
@@ -24,9 +24,8 @@ interface GetSettingsMessage {
   type: 'get-settings' | 'get-speaker-timeline';
 }
 
-// The offscreen document has no visible surface, so it can never show the
-// microphone permission prompt itself (see offscreen.ts) — send the user to
-// a real tab that can, once, right after install.
+// First run: walk through where the record button is and connecting to a
+// host — there's no permission to grant, but no host means no transcripts.
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     void chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
@@ -54,7 +53,7 @@ async function ensureOffscreenDocument(): Promise<void> {
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_URL,
     reasons: [chrome.offscreen.Reason.USER_MEDIA],
-    justification: 'Records tab + microphone audio and converts it for transcription.',
+    justification: "Records the Meet tab's audio and converts it for transcription.",
   });
 }
 
@@ -90,7 +89,6 @@ async function startRecording(): Promise<void> {
     streamId,
     tabTitle: tab.title,
     recordingName,
-    meetVoice: await getMeetVoiceMode(),
   });
 }
 
@@ -101,8 +99,8 @@ async function stopRecording(): Promise<void> {
 }
 
 // The Meet toolbar button (content.ts) has no room for a banner/explanation
-// — when it can't just proceed (mic never granted, or the last attempt
-// ended in an error), it asks for the real popup instead, which does.
+// — when it can't just proceed (the last attempt ended in an error), it
+// asks for the real popup instead, which does.
 // chrome.action.openPopup() needs Chrome 127+; fall back to a plain tab for
 // anything older or that otherwise refuses (observed to matter on Brave).
 async function openPopup(): Promise<void> {

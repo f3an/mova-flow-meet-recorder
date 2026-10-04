@@ -62,21 +62,6 @@ export async function setSettings(settings: Settings): Promise<void> {
   await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
 }
 
-// Whether the offscreen document's origin has ever been granted microphone
-// access — a real permissions.query() check would ask about the CURRENT
-// page's origin, not the extension's, so it can't tell us this. Set once,
-// from a context that can actually request the grant (onboarding.ts, or the
-// popup banner) — see MIC_GRANTED_KEY's readers for why this matters.
-const MIC_GRANTED_KEY = 'movaFlowMicGranted';
-
-export async function getMicGranted(): Promise<boolean> {
-  const { [MIC_GRANTED_KEY]: granted } = await chrome.storage.local.get(MIC_GRANTED_KEY);
-  return granted === true;
-}
-
-export async function setMicGranted(granted: boolean): Promise<void> {
-  await chrome.storage.local.set({ [MIC_GRANTED_KEY]: granted });
-}
 
 // The caption timeline for the recording in progress. Written by the content
 // script in the Meet tab (the only place that can see the captions), read by
@@ -96,18 +81,4 @@ export async function setSpeakerTimeline(timeline: SpeakerTurn[]): Promise<void>
     // disturbing the recording over.
     console.error('[mova-flow] setSpeakerTimeline failed:', err);
   }
-}
-
-// EXPERIMENTAL: take the user's side of the call from the audio Meet itself
-// sends (see meetAudioHook.ts) instead of opening the microphone. The
-// extension then never asks for — or touches — the mic at all.
-const MEET_VOICE_KEY = 'movaFlowMeetVoice';
-
-export async function getMeetVoiceMode(): Promise<boolean> {
-  const { [MEET_VOICE_KEY]: enabled } = await chrome.storage.local.get(MEET_VOICE_KEY);
-  return enabled === true;
-}
-
-export async function setMeetVoiceMode(enabled: boolean): Promise<void> {
-  await chrome.storage.local.set({ [MEET_VOICE_KEY]: enabled });
 }

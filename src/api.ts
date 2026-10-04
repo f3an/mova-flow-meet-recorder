@@ -57,7 +57,7 @@ export async function transcribe(
   wav: Blob,
   language: string,
   filename: string,
-  /** "me-others": the WAV is stereo with the user's mic on the left and the
+  /** "me-others": the WAV is stereo with the user's side on the left and the
    * call on the right, so the host labels each line by speaker — by name,
    * wherever the caption timeline covers it. */
   speakers: { mode: 'me-others'; timeline: SpeakerTurn[] } | null,

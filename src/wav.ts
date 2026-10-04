@@ -2,7 +2,7 @@
 // server's whisper-cli.exe only decodes audio via miniaudio, which doesn't
 // support webm/opus (what MediaRecorder produces), so recordings are always
 // resampled to 16kHz and re-encoded as plain WAV before upload. Unlike the
-// app's Upload tab this keeps both channels: the recording is mic-left,
+// app's Upload tab this keeps both channels: the recording is user-left,
 // call-right (see offscreen.ts), and the host tells the speakers apart by
 // which channel is louder. whisper itself still hears the mix.
 
@@ -88,7 +88,7 @@ async function toMonoPCM16k(blob: Blob): Promise<AudioBuffer> {
   return offline.startRendering();
 }
 
-/** EXPERIMENTAL "voice from Meet": the call recording (right channel) plus
+/** The call recording (right channel) plus
  * the user's side recorded separately inside the Meet page (see
  * meetAudioHook.ts), placed on the left channel at `meOffsetSec` — when the
  * page's recorder started relative to the call recorder. */

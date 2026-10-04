@@ -1,5 +1,5 @@
 import { checkConnection } from './api';
-import { getMeetVoiceMode, getSettings, getStatus, setMeetVoiceMode, setMicGranted, RecordingStatus } from './state';
+import { getSettings, getStatus, RecordingStatus } from './state';
 import { initSettingsPanel } from './settingsPanel';
 
 const statusArea = document.getElementById('statusArea') as HTMLDivElement;
@@ -18,45 +18,6 @@ function formatElapsed(startedAt: number): string {
 }
 
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
-
-// The offscreen document that does the actual recording has no visible
-// surface, so it can never show the microphone permission prompt itself —
-// this banner is the fallback for anyone who skipped/dismissed the
-// onboarding tab that normally handles it right after install.
-async function renderMicBannerIfNeeded(): Promise<void> {
-  const micBanner = document.getElementById('micBanner');
-  if (!micBanner) return;
-  // Voice taken from Meet's own stream — the microphone is never opened.
-  if (await getMeetVoiceMode()) {
-    micBanner.innerHTML = '';
-    return;
-  }
-  try {
-    const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-    if (status.state === 'granted') return;
-  } catch {
-    // permissions.query for 'microphone' isn't supported everywhere — fall
-    // through and show the banner, the button below still works either way.
-  }
-  micBanner.innerHTML = `
-    <div class="banner" style="margin-top: 8px;">
-      Microphone access isn't enabled yet — recordings will miss your own voice.
-      <div class="record-row" style="margin-top: 8px;">
-        <button class="action secondary" id="grantMicBtn">Allow microphone access</button>
-      </div>
-    </div>
-  `;
-  document.getElementById('grantMicBtn')?.addEventListener('click', async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      for (const track of stream.getTracks()) track.stop();
-      void setMicGranted(true);
-      micBanner.innerHTML = '';
-    } catch {
-      /* still denied — leave the banner up so they can retry */
-    }
-  });
-}
 
 // Checked on every popup open so a recording never gets to the "can't reach
 // the host" surprise only after the call is already over — this is the same
@@ -95,14 +56,12 @@ function render(status: RecordingStatus): void {
   if (status.stage === 'idle') {
     statusArea.innerHTML = `
       <div class="banner">Open a Google Meet call, then press Record.</div>
-      <div id="micBanner"></div>
       <div id="hostBanner"></div>
       <div class="record-row" style="margin-top: 12px;">
         <button class="action" id="recordBtn">● Record meeting</button>
       </div>
     `;
     document.getElementById('recordBtn')?.addEventListener('click', startRecording);
-    void renderMicBannerIfNeeded();
     void renderHostBannerIfNeeded();
     return;
   }
@@ -196,6 +155,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session' && changes.movaFlowStatus) {
     render(changes.movaFlowStatus.newValue ?? { stage: 'idle' });
   }
+  // Saved new host settings: re-check right away instead of leaving the
+  // stale "can't reach" banner up until the popup is reopened.
+  if (area === 'local' && changes.movaFlowSettings) void renderHostBannerIfNeeded();
 });
 
 async function init(): Promise<void> {
@@ -205,11 +167,3 @@ async function init(): Promise<void> {
 
 void init();
 
-const meetVoiceCheckbox = document.getElementById('meetVoiceCheckbox') as HTMLInputElement | null;
-if (meetVoiceCheckbox) {
-  void getMeetVoiceMode().then((enabled) => (meetVoiceCheckbox.checked = enabled));
-  meetVoiceCheckbox.addEventListener('change', async () => {
-    await setMeetVoiceMode(meetVoiceCheckbox.checked);
-    await renderMicBannerIfNeeded();
-  });
-}
