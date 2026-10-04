@@ -32,13 +32,19 @@ async function fetchToken(settings: Settings): Promise<string> {
 /** Checks the host is reachable and the secret is correct — mirrors the
  * Electron client's "Test connection" button. */
 export async function checkConnection(settings: Settings): Promise<{ reachable: boolean; authOk: boolean }> {
+  // Two separate steps on purpose: a rejected secret (401 from /api/auth)
+  // must not read as "server not responding" — the server answered fine.
   try {
     const res = await fetch(`${baseUrl(settings)}/`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return { reachable: false, authOk: false };
+  } catch {
+    return { reachable: false, authOk: false };
+  }
+  try {
     await fetchToken(settings);
     return { reachable: true, authOk: true };
   } catch {
-    return { reachable: false, authOk: false };
+    return { reachable: true, authOk: false };
   }
 }
 

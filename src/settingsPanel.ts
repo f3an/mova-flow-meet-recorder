@@ -65,7 +65,9 @@ export async function initSettingsPanel(): Promise<void> {
     settingsResult.textContent = !res.reachable
       ? 'Server not responding.'
       : !res.authOk
-        ? 'Connection OK, but the secret key is wrong.'
+        ? secret
+          ? 'Connection OK, but the secret key is wrong.'
+          : 'Server found — now enter the secret key from the Mova Flow app (Server tab).'
         : 'Connection successful, authorization passed.';
   });
 
