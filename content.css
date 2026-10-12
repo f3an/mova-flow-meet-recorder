@@ -47,3 +47,75 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
+
+/* In the call's own controls — Zoom's bottom bar, Teams' meeting controls —
+   which supply the button's size, hover and label (their own button classes,
+   see content.ts); only the icon is ours. */
+.mova-flow-inline-btn .mova-flow-icon {
+  width: 16px;
+  height: 16px;
+  margin: 4px;
+  border-radius: 50%;
+  background: #e5484d;
+  display: block;
+}
+.mova-flow-inline-btn.is-teams .mova-flow-icon { width: 14px; height: 14px; margin: 3px; }
+/* Jitsi centres its own icons with styles that don't reach this markup —
+   centred here instead, leaving the box's size to Jitsi. */
+.mova-flow-inline-btn.is-jitsi > div,
+.mova-flow-inline-btn.is-jitsi .toolbox-icon,
+.mova-flow-inline-btn.is-jitsi .jitsi-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mova-flow-inline-btn.is-jitsi .jitsi-icon { width: 24px; height: 24px; }
+.mova-flow-inline-btn.is-jitsi .mova-flow-icon { width: 14px; height: 14px; margin: 0; }
+.mova-flow-inline-btn.is-recording .mova-flow-icon {
+  border-radius: 3px;
+  animation: mova-flow-pulse 1.4s ease-in-out infinite;
+}
+.mova-flow-inline-btn.is-recording .mova-flow-label { color: #ff8a8d; }
+.mova-flow-inline-btn.is-processing .mova-flow-icon { background: #8a8672; }
+.mova-flow-inline-btn:disabled,
+.mova-flow-inline-btn.is-processing { cursor: wait; opacity: 0.7; }
+
+/* "One more step" — Chrome wants the extension called on before the tab can
+   be recorded (content.ts / background.ts). */
+.mova-flow-hint {
+  position: fixed;
+  z-index: 2147483647;
+  width: 300px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 30px 14px 16px;
+  border-radius: 10px;
+  background: #f5f2e8;
+  color: #23241f;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  font: 13px/1.45 Georgia, "Times New Roman", serif;
+  text-align: left;
+}
+.mova-flow-hint strong { font-size: 14.5px; font-weight: 600; color: #2c4235; }
+.mova-flow-hint b { font-weight: 600; }
+.mova-flow-hint kbd {
+  padding: 1px 6px;
+  border: 1px solid #cfcab8;
+  border-radius: 4px;
+  background: #fff;
+  font: 11.5px ui-monospace, Menlo, monospace;
+  color: #23241f;
+}
+.mova-flow-hint-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: none;
+  background: none;
+  color: #6b6a5f;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}

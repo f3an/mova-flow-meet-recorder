@@ -104,3 +104,9 @@ export async function mergeToStereoWav(callBlob: Blob, meBlob: Blob, meOffsetSec
   out.copyToChannel(left, 0);
   return encodeWav(out);
 }
+
+/** Any audio/video file the browser can decode, as a 16 kHz mono WAV — what
+ * the Mova Flow app's own Upload tab sends (prepareFileForUpload). */
+export async function fileToMonoWav(blob: Blob): Promise<Blob> {
+  return encodeWav(await toMonoPCM16k(blob));
+}

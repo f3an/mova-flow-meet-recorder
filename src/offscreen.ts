@@ -1,9 +1,10 @@
 // Runs in an offscreen document — the only place in Manifest V3 with a real
 // DOM, so it's the only place that can hold a MediaRecorder or an
 // AudioContext. background.ts just hands this a tabCapture stream id and a
-// start/stop signal; everything from mixing to uploading happens here.
-import { transcribe } from './api';
-import type { RecordingStatus, Settings, SpeakerTurn } from './state';
+// start/stop signal; everything from mixing to handing the recording to the
+// Mova Flow app (which transcribes it) happens here.
+import { checkApp, handOverToApp, waitForApp } from './bridge';
+import type { RecordingStatus, SpeakerTurn } from './state';
 import { mergeToStereoWav, recordingToWav } from './wav';
 
 // chrome.storage is unavailable in the offscreen document on at least some
@@ -13,9 +14,6 @@ import { mergeToStereoWav, recordingToWav } from './wav';
 // functions directly.
 async function setStatus(status: RecordingStatus): Promise<void> {
   await chrome.runtime.sendMessage({ target: 'background', type: 'set-status', status });
-}
-async function getSettings(): Promise<Settings> {
-  return chrome.runtime.sendMessage({ target: 'background', type: 'get-settings' });
 }
 async function getSpeakerTimeline(): Promise<SpeakerTurn[]> {
   return chrome.runtime.sendMessage({ target: 'background', type: 'get-speaker-timeline' });
@@ -34,22 +32,18 @@ interface StopMessage {
 }
 type OffscreenMessage = StartMessage | StopMessage;
 
-// The Mova Flow client app, if it's running on this same Mac, listens here
-// for finished recordings — see localBridge.ts in the main Mova-Flow repo.
-// 127.0.0.1-only by design, same as the app's own history endpoints, so this
-// only ever works for an app on this machine, never a remote host.
-const HISTORY_BRIDGE_URL = 'http://127.0.0.1:5057/extension/history';
-
 let recorder: MediaRecorder | null = null;
 let chunks: Blob[] = [];
 let audioContext: AudioContext | null = null;
 let tracks: MediaStreamTrack[] = [];
-let recordingName = 'meet-record';
+let recordingName = 'call-record';
 let callStartedAt = 0;
+/** Between the start message and the recorder actually running. */
+let starting: Promise<void> | null = null;
 
 // The user's side of the call never comes from the microphone — the
-// extension doesn't ask for it. It's the audio Meet itself sends to the other
-// participants, recorded inside the Meet page (meetAudioHook.ts), relayed by
+// extension doesn't ask for it. It's the audio the call page itself sends to
+// the other participants, recorded inside that page (callAudioHook.ts), relayed by
 // content.ts over this port as it's recorded, and merged in as the left channel.
 interface MeRecording {
   startedAt: number;
@@ -73,6 +67,8 @@ chrome.runtime.onConnect.addListener((port) => {
     if (msg.type === 'started') {
       recording.startedAt = msg.startedAt ?? 0;
       recording.hasTrack = !!msg.hasTrack;
+    } else if (msg.type === 'track') {
+      recording.hasTrack = true;
     } else if (msg.type === 'chunk' && msg.data) {
       recording.parts.push(Uint8Array.from(atob(msg.data), (c) => c.charCodeAt(0)));
     } else if (msg.type === 'stopped') {
@@ -87,11 +83,20 @@ async function startRecording(streamId: string, name: string): Promise<void> {
   recordingName = name;
   // chromeMediaSource/chromeMediaSourceId aren't in the standard
   // MediaTrackConstraints type — this shape is Chrome-extension-specific.
-  const tabStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId },
-    },
-  } as unknown as MediaStreamConstraints);
+  let tabStream: MediaStream;
+  try {
+    tabStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId },
+      },
+    } as unknown as MediaStreamConstraints);
+  } catch (err) {
+    // Chrome refused the tab's audio: say so, rather than leave the status at
+    // "recording" with nothing behind it (Stop then had nothing to stop).
+    await setStatus({ stage: 'error', message: `Chrome didn't allow recording this tab: ${(err as Error).message || err}` });
+    window.close();
+    return;
+  }
 
   try {
     audioContext = new AudioContext();
@@ -143,36 +148,35 @@ async function saveLocally(blob: Blob, ext: string, reason: string): Promise<voi
   await setStatus({ stage: 'saved-locally', filename, reason });
 }
 
-/** Best-effort — the Mova Flow client app may not be running, or may be on a
- * different machine (the extension itself doesn't know or care where its
- * configured host actually lives). Never let this failing affect the
- * recording's own done/error status. */
-async function reportToClientHistory(wav: Blob, language: string, text: string): Promise<void> {
-  try {
-    const form = new FormData();
-    form.append('file', wav, `${recordingName}.wav`);
-    form.append('filename', `${recordingName}.wav`);
-    form.append('language', language);
-    form.append('text', text);
-    await fetch(HISTORY_BRIDGE_URL, { method: 'POST', body: form, signal: AbortSignal.timeout(3000) });
-  } catch {
-    /* no local Mova Flow app to report to — that's fine */
-  }
-}
-
 /** The call recording with the user's side merged in on the left channel —
- * which stays silent if the Meet page never sent any audio (muted the whole
- * call, or the hook couldn't see Meet's outgoing track). */
+ * which stays silent if the user was muted the whole call. When the hook
+ * never saw an outgoing track at all (a service that doesn't send audio over
+ * WebRTC, or one it can't follow), there's no "me" side to speak of: the
+ * recording goes out mono, as plain "everyone on the call". */
 async function buildWav(callWebm: Blob): Promise<Blob> {
   const recording = me;
   me = null;
   if (!recording) return recordingToWav(callWebm);
-  // The Meet tab stops its own recorder when it sees the status change;
+  // The call tab stops its own recorder when it sees the status change;
   // give its last chunks a moment to arrive.
   await Promise.race([recording.stopped, new Promise((r) => setTimeout(r, 10000))]);
-  if (!recording.parts.length) return recordingToWav(callWebm);
+  if (!recording.parts.length || !recording.hasTrack) return recordingToWav(callWebm);
   const meWebm = new Blob(recording.parts, { type: 'audio/webm' });
   return mergeToStereoWav(callWebm, meWebm, (recording.startedAt - callStartedAt) / 1000);
+}
+
+/** The start of the "saved here instead" message: why the app didn't take it. */
+async function whyNoApp(): Promise<string> {
+  switch (await checkApp()) {
+    case 'blocked':
+      return "Your browser didn't let the extension reach the Mova Flow app (allow it in the extension's settings),";
+    case 'outdated':
+      return 'Mova Flow needs an update to 0.4.12 or newer to take recordings from this extension,';
+    case 'refused':
+      return "Mova Flow doesn't recognize this copy of the extension,";
+    default:
+      return "Mova Flow isn't running on this computer,";
+  }
 }
 
 async function stopRecordingAndTranscribe(): Promise<void> {
@@ -206,23 +210,30 @@ async function stopRecordingAndTranscribe(): Promise<void> {
     return;
   }
 
+  // Read only now, after the conversion above: that gives the call tab's
+  // own final caption flush (see content.ts) time to land.
+  const timeline = await getSpeakerTimeline().catch(() => [] as SpeakerTurn[]);
+  // The app keeps it in its History before anything else happens, then
+  // transcribes it through its own host — a failure anywhere after this
+  // point loses nothing.
+  const recordingId = await handOverToApp(wav, `${recordingName}.wav`, { timeline, transcribe: true });
+  if (!recordingId) {
+    await saveLocally(wav, 'wav', `${await whyNoApp()} so the recording was saved here instead. Drop this file into Mova Flow's Upload tab once that's sorted.`);
+    window.close();
+    return;
+  }
+
   try {
-    const settings = await getSettings();
-    // Read only now, after the conversion above: that gives the Meet tab's
-    // own final caption flush (see content.ts) time to land.
-    const timeline = await getSpeakerTimeline().catch(() => []);
-    const speakers = { mode: 'me-others', timeline } as const;
-    const result = await transcribe(settings, wav, 'auto', `${recordingName}.wav`, speakers, (message) => {
-      void setStatus({ stage: 'processing', message });
-    });
-    await setStatus({ stage: 'done', result: result.text, detectedLanguage: result.detectedLanguage });
-    await reportToClientHistory(wav, result.detectedLanguage, result.text);
+    const result = await waitForApp(recordingId, (message) => void setStatus({ stage: 'processing', message }));
+    await setStatus({ stage: 'done', result: result.text, detectedLanguage: result.language });
   } catch (err) {
-    // Host not configured, discovery didn't find it, blocked by the
-    // browser/OS (see README's troubleshooting notes), or genuinely
-    // offline — whatever the reason, an hour of meeting audio is too
-    // valuable to just discard on a network error.
-    await saveLocally(wav, 'wav', `Couldn't reach the Mova Flow host (${(err as Error).message || 'connection failed'}).`);
+    const message = (err as Error).message || 'Transcription failed.';
+    await setStatus({
+      stage: 'error',
+      message: /History/.test(message)
+        ? message
+        : `${message} The recording is safe in Mova Flow's History — press Transcribe there once this is fixed.`,
+    });
   } finally {
     // Nothing keeps this document alive once the job is done — the next
     // recording creates a fresh one, per Chrome's own guidance on offscreen
@@ -231,8 +242,17 @@ async function stopRecordingAndTranscribe(): Promise<void> {
   }
 }
 
-chrome.runtime.onMessage.addListener((message: OffscreenMessage) => {
+chrome.runtime.onMessage.addListener((message: OffscreenMessage, _sender, sendResponse) => {
   if (message.target !== 'offscreen') return;
-  if (message.type === 'start-recording') void startRecording(message.streamId, message.recordingName);
-  if (message.type === 'stop-recording') void stopRecordingAndTranscribe();
+  if (message.type === 'start-recording') {
+    starting = startRecording(message.streamId, message.recordingName)
+      .catch(() => {})
+      .finally(() => (starting = null));
+  }
+  if (message.type === 'stop-recording') {
+    // Answered right away: background.ts needs to know whether there was a
+    // recording here at all, not wait for the upload.
+    sendResponse({ recording: !!recorder || !!starting });
+    void (starting ?? Promise.resolve()).then(() => stopRecordingAndTranscribe());
+  }
 });

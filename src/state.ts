@@ -7,6 +7,9 @@
 export type RecordingStatus =
   | { stage: 'idle' }
   | { stage: 'recording'; tabTitle: string; startedAt: number; recordingName: string; tabId?: number }
+  // A start waiting for the click on the extension's icon that lets Chrome
+  // capture the tab (see background.ts).
+  | { stage: 'awaiting-grant'; tabId: number; since: number; shortcut: string; iconGrants: boolean }
   | { stage: 'processing'; message: string }
   | { stage: 'done'; result: string; detectedLanguage: string }
   | { stage: 'error'; message: string }
@@ -28,14 +31,7 @@ export interface SpeakerTurn {
   self?: boolean;
 }
 
-export interface Settings {
-  host: string;
-  port: number;
-  secret: string;
-}
-
 const STATUS_KEY = 'movaFlowStatus';
-const SETTINGS_KEY = 'movaFlowSettings';
 
 export async function getStatus(): Promise<RecordingStatus> {
   const { [STATUS_KEY]: status } = await chrome.storage.session.get(STATUS_KEY);
@@ -51,15 +47,6 @@ export async function setStatus(status: RecordingStatus): Promise<void> {
     // recoverable, versus losing the rest of the meeting's audio.
     console.error('[mova-flow] setStatus failed:', err);
   }
-}
-
-export async function getSettings(): Promise<Settings> {
-  const { [SETTINGS_KEY]: settings } = await chrome.storage.local.get(SETTINGS_KEY);
-  return settings ?? { host: '127.0.0.1', port: 5000, secret: '' };
-}
-
-export async function setSettings(settings: Settings): Promise<void> {
-  await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
 }
 
 

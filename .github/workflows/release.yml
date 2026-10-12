@@ -57,7 +57,7 @@ jobs:
 
       - name: Package extension
         run: |
-          zip -r extension.zip manifest.json popup.html popup.css onboarding.html onboarding.css offscreen.html content.css icons dist -x "*.DS_Store"
+          zip -r extension.zip manifest.json popup.html popup.css sidepanel.html sidepanel.css onboarding.html onboarding.css onboarding offscreen.html content.css icons dist -x "*.DS_Store"
           unzip -l extension.zip
 
       - name: Keep the package as a build artifact

@@ -159,3 +159,84 @@ input {
   min-height: 14px;
 }
 
+
+.expand-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #e9e7dc;
+  cursor: pointer;
+}
+.expand-btn:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* Side panel: the same UI, but as tall and wide as Chrome makes the panel,
+   so a long transcript reads without a tiny scroll box. */
+body.expanded {
+  width: auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+}
+body.expanded #app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+body.expanded .banner { font-size: 13.5px; }
+body.expanded .tab-title { font-size: 13px; }
+body.expanded .rec-status { font-size: 14px; margin: 8px 0 14px; }
+body.expanded .transcript-box {
+  max-height: none;
+  height: calc(100vh - 240px);
+  min-height: 200px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+body.expanded details#settingsDetails { margin-top: auto; padding-top: 16px; }
+
+.app-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: left;
+}
+.app-status strong { color: var(--ink); font-weight: 400; font-size: 14px; }
+.app-status.ok { border-color: #b9cbbd; }
+.app-status.ok strong::before { content: '● '; color: var(--moss); }
+.app-status.missing { border-color: #e5c7b6; }
+.app-status .actions { margin-top: 8px; }
+a.action { text-decoration: none; display: inline-block; }
+#hostBanner:not(:empty) { margin-top: 10px; }
+.app-status .ext-id {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  word-break: break-all;
+  user-select: all;
+}
+.banner kbd {
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  font-family: var(--mono);
+  font-size: 11px;
+}

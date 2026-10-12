@@ -22,11 +22,11 @@
         <div class="eyebrow">Welcome</div>
         <h1>Meeting notes, without the cloud</h1>
         <p class="lead">
-          Record your Google Meet calls and get a transcript that says who said what —
-          transcribed on your own Mova Flow host. Nothing is sent anywhere else.
+          Record your calls and get a transcript that says who said what — transcribed by the Mova Flow app
+          on your own computer or host. Nothing is sent anywhere else.
         </p>
         <ul class="pills">
-          <li>Runs on your own host</li>
+          <li>Google Meet · Teams · Zoom · Jitsi</li>
           <li>No microphone access</li>
           <li>Who said what</li>
         </ul>
@@ -47,51 +47,41 @@
       </div>
     </section>
 
-    <h2 class="section-title">Set up in two steps</h2>
+    <h2 class="section-title">Set up in three steps</h2>
 
     <section class="card step">
       <div class="step-head">
         <div class="step-num">1</div>
         <div>
-          <h3>Connect to your Mova Flow host</h3>
+          <h3>Open the Mova Flow app on this computer</h3>
           <p>
-            The same host your desktop app uses. Find it automatically if it's on this network,
-            or copy the address and the access secret key from the host's <strong>Server</strong> tab.
+            The extension records; the Mova Flow desktop app transcribes — on this computer, or on the host it's
+            connected to (your PC with a GPU, say) — and keeps every recording in its History.
+            <strong>The extension doesn't work without it:</strong> install it once, set the host up there, and keep
+            it running (it lives in the menu bar / tray). Version 0.4.12 or newer.
           </p>
         </div>
       </div>
 
-      <div class="host-form">
-        <button class="action secondary" id="findHostBtn">⟲ Find host on network</button>
-        <div class="field-row">
-          <div>
-            <label for="hostInput">Host</label>
-            <input type="text" id="hostInput" placeholder="127.0.0.1">
-          </div>
-          <div class="port">
-            <label for="portInput">Port</label>
-            <input type="number" id="portInput" placeholder="5000">
-          </div>
-        </div>
-        <label for="secretInput">Secret key</label>
-        <input type="password" id="secretInput" placeholder="from the host's Server tab">
-        <div class="actions">
-          <button class="action" id="saveSettingsBtn">Save</button>
-          <button class="action secondary" id="testConnectionBtn">Test connection</button>
-        </div>
-        <div class="hint" id="settingsResult"></div>
-      </div>
+      <div class="host-form" id="appStatus"></div>
     </section>
 
     <section class="card step">
       <div class="step-head">
         <div class="step-num">2</div>
         <div>
-          <h3>Press Record in Meet</h3>
+          <h3>Press Record in the call</h3>
           <p>
-            A record button appears right in Meet's own call controls — no need to find the extension
-            icon mid-call. Press it again to stop; the transcript comes back in the extension's popup.
+            A record button appears right in the call's own controls — next to mic and camera in Google Meet, in
+            Zoom's bottom bar (join from the browser), first in Teams' meeting controls, in Jitsi's toolbox. Press it
+            again to stop; the transcript comes back in the extension and lands in the app's History.
           </p>
+          <ul class="services" aria-label="Works with">
+            <li>Google Meet</li>
+            <li>Microsoft Teams</li>
+            <li>Zoom <small>in the browser</small></li>
+            <li>Jitsi Meet</li>
+          </ul>
         </div>
       </div>
 
@@ -114,6 +104,60 @@
       </div>
     </section>
 
+    <section class="card step">
+      <div class="step-head">
+        <div class="step-num">3</div>
+        <div>
+          <h3>The first time on a call, one more key</h3>
+          <p>
+            Chrome only lets an extension record a tab once you've called on it there — a button inside the page
+            doesn't count. So the first time you press Record on a call, the icon lights up with
+            <b class="rec">REC</b>; then press <kbd id="shortcut">⌥⇧R</kbd>, or right-click the call →
+            <b>Record this call with Mova Flow</b>. Recording starts by itself, and holds for the rest of the call.
+          </p>
+        </div>
+      </div>
+      <div class="keys" aria-hidden="true">
+        <div class="keys-row"><kbd class="big" id="shortcutBig">⌥⇧R</kbd><span>starts or stops a recording, any time</span></div>
+        <div class="keys-or">or</div>
+        <div class="menu-demo">
+          <div class="menu-item">Back</div>
+          <div class="menu-item">Reload</div>
+          <div class="menu-sep"></div>
+          <div class="menu-item active"><img src="icons/16x16.png" width="14" height="14" alt=""> Record this call with Mova Flow</div>
+          <div class="menu-item">Inspect</div>
+        </div>
+      </div>
+    </section>
+
+    <h2 class="section-title section-gap">Keep it open next to the call</h2>
+
+    <section class="card feature">
+      <figure class="panel-shot">
+        <img src="onboarding/side-panel.gif" width="300" height="505" alt="The side panel: a recording runs with a timer, is sent to Mova Flow and transcribed, and shows up in History">
+      </figure>
+      <div>
+        <h3>The side panel</h3>
+        <p>
+          Press <b>⧉</b> in the popup and the whole extension moves into the browser's side panel — it stays open
+          during the call instead of closing on the first click elsewhere, and the recording keeps going while you
+          switch tabs.
+        </p>
+        <ul class="feature-list">
+          <li><b>Record</b> — start, stop, and the finished transcript.</li>
+          <li><b>History</b> — the Mova Flow app's History, searchable; copy, download, delete, or transcribe a
+            recording that's still waiting.</li>
+          <li><b>Upload</b> — any audio or video file, transcribed by the app.</li>
+          <li><b>Settings</b> — whether the app is running and where it transcribes.</li>
+        </ul>
+        <p class="fine">
+          Settings can make the toolbar icon open the side panel instead of the popup. A click that opens the side
+          panel doesn't count as calling on the extension, though — use the key or the right-click for the first
+          recording on a call.
+        </p>
+      </div>
+    </section>
+
     <section class="callout">
       <svg class="callout-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 2.5 4.5 5.5v6c0 4.6 3.1 8.6 7.5 10 4.4-1.4 7.5-5.4 7.5-10v-6L12 2.5Z" fill="none"
@@ -124,15 +168,16 @@
       <div>
         <h3>Your microphone stays yours</h3>
         <p>
-          Your side of the conversation is taken from the audio Meet itself sends to the others — so it's
-          silent whenever you're muted, and this extension never asks for or opens your microphone. Names come
-          from Meet's live captions, which are switched on only on your screen while you record.
+          Your side of the conversation is taken from the audio the call itself sends to the others — so it's
+          silent whenever you're muted, and this extension never asks for or opens your microphone. (Zoom sends no
+          such audio, so there it's the microphone Zoom itself opened, silenced while Zoom shows you muted.) On Meet,
+          names come from its live captions, which are switched on only on your screen while you record.
         </p>
       </div>
     </section>
 
     <footer class="done" id="doneSection">
-      Once the host is saved, you're all set — close this tab and join a call.
+      Once it says “Connected to Mova Flow”, you're all set — close this tab and join a call.
       <a href="https://f3an.github.io/Mova-Flow/privacy.html" target="_blank" rel="noopener">Privacy policy</a>
     </footer>
   </main>

@@ -2,3 +2,4 @@ node_modules/
 dist/
 *.log
 store-assets/*.zip
+.DS_Store
