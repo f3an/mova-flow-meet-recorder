@@ -19,5 +19,5 @@ Repository secrets `CHROME_EXTENSION_ID`, `CHROME_CLIENT_ID`, `CHROME_CLIENT_SEC
 
 ## In this folder
 
-- `screenshots/` — the 1280x800 listing screenshots (setup page, idle popup, recording popup, finished transcript with speaker names).
+- `screenshots/` — the 1280x800 listing screenshots (transcript, side panel, the Record button in Meet/Zoom/Teams/Jitsi, the setup page) and the promo tiles, all 24-bit PNG (the store rejects an alpha channel). Made from the extension's own pages rendered with sample data — no real call or person in them.
 - `mova-flow-meet-recorder-0.1.0.zip` — the package of the first, manually submitted version; kept for reference only.
