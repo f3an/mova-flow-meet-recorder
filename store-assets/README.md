@@ -21,4 +21,4 @@ Repository secrets `CHROME_EXTENSION_ID`, `CHROME_CLIENT_ID`, `CHROME_CLIENT_SEC
 
 - `screenshots/` — the 1280x800 listing screenshots (transcript, side panel, the Record button in Meet/Zoom/Teams/Jitsi, the setup page) and the promo tiles, all 24-bit PNG (the store rejects an alpha channel). Made from the extension's own pages rendered with sample data — no real call or person in them.
 - `mova-flow-meet-recorder-0.1.0.zip` — the package of the first, manually submitted version; kept for reference only.
-- `promo-video.mp4` — a 31-second promo (1920x1200) for the listing's "Global promo video": the store only takes a YouTube link, so upload it there (unlisted is fine) and paste the URL.
+- `promo-video.mp4` — a 36-second animated promo (1920x1080) for the listing's "Global promo video": the store only takes a YouTube link, so upload it there (unlisted is fine) and paste the URL.
